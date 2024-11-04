@@ -1,6 +1,5 @@
 pandas
-flask[async]
-python-telegram-bot[webhooks]
+python-telegram-bot
 openpyxl
 xlsxwriter
 
