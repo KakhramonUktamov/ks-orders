@@ -8,6 +8,11 @@ from io import BytesIO
 # Initialize Flask app
 app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Bot is running successfully!"
+
+
 # Define environment variables and constants
 PORT = int(os.environ.get("PORT", "8443"))
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Store your bot token in Heroku Config Vars
