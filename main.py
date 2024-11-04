@@ -1,10 +1,17 @@
+import os
 import pandas as pd
+from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from io import BytesIO
 
-# Define your bot token (replace 'YOUR_BOT_TOKEN' with the actual token)
-BOT_TOKEN = '7662681407:AAHSrS0X-ksGdObc2fr1qqzn2u6xJ3nF4Hk'
+# Initialize Flask app
+app = Flask(__name__)
+
+# Define environment variables and constants
+PORT = int(os.environ.get("PORT", "8443"))
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Store your bot token in Heroku Config Vars
+APP_URL = os.environ.get("APP_URL")           # Store your Heroku app URL in Config Vars
 
 # State definitions for ConversationHandler
 ASK_FILE, ASK_DAYS, PROCESS_FILE = range(3)
@@ -16,7 +23,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # Step 1: Ask for the Excel file
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['file'] = await update.message.document.get_file()  # Store the file temporarily
+    context.user_data['file'] = await update.message.document.get_file()
     await update.message.reply_text("Now, please enter the number of days for overstock:")
     return ASK_DAYS
 
@@ -35,58 +42,25 @@ async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     file = context.user_data['file']
     days = context.user_data['days']
-    
-    # Download the file as bytes
     excel_bytes = BytesIO()
     await file.download_to_memory(excel_bytes)
     excel_bytes.seek(0)
-
-    # Load the Excel file into a DataFrame
     data = pd.read_excel(excel_bytes)
 
-    # ---- Add your data cleaning and transformation code here ----
+    # Data processing
     data.columns = data.iloc[12].values
     data0 = data[15:-2]
-    
-    cols = ['Артикул ','Номенклатура','Дней на распродажи',
-        'Остаток на конец','Средние продажи день',
-        'Прошло дней от последней продажи']
+    cols = ['Артикул ','Номенклатура','Дней на распродажи', 'Остаток на конец', 'Средние продажи день', 'Прошло дней от последней продажи']
+    data1 = data0[cols].reset_index(drop=True)
 
-    data1 = data0[cols]       
-    data1 = data1.reset_index(drop=True)
-
-    #dropping -H this kinda values:
-    for_drop =[]
-    for index,i in enumerate(data1['Артикул ']):
-        if "-Н" in i:
-            for_drop.append(index)
-    data1 = data1.drop(for_drop,axis=0) 
-
-    #dealing with numbers of selling days
-    data1['Дней на распродажи'] = data1['Дней на распродажи'].str.replace(' ','')
-    data1['Прошло дней от последней продажи']=data1['Прошло дней от последней продажи'].str.replace(' ','')
-    data1 = data1.replace({'∞':-1})
-    data1 = data1.fillna(0)
-    data1[['Дней на распродажи','Прошло дней от последней продажи']] = data1[['Дней на распродажи','Прошло дней от последней продажи']].astype(int)
-    data1 = data1.reset_index(drop=True)
-    
-
-    data1['Общый продажи период'] = data1['Средние продажи день']*days
-    data1['purchase'] = 0
-    data1['overstock'] = 0
-    data1['outofstock'] = 0
-
-    for i, value in enumerate(data1['Дней на распродажи']):
-        if value<days and value>=0:
-            data1.loc[i,'purchase'] = data1.loc[i,'Общый продажи период'] - data1.loc[i,'Остаток на конец']
-        else:
-            data1.loc[i,'purchase'] = 'overstock'
-            data1.loc[i,'overstock'] = data1.loc[i,'Остаток на конец'] - data1.loc[i,'Общый продажи период']
-    for i, value in enumerate(data1['Остаток на конец']):
-        if value == 0:
-            data1.loc[i,'outofstock'] = data1.loc[i,'Прошло дней от последней продажи']
-
-    order= data1[data1['purchase']!='overstock'][['Артикул ','Номенклатура','purchase','overstock','outofstock']]
+    # Dropping '-Н' values and cleaning data
+    data1 = data1[~data1['Артикул '].str.contains("-Н")]
+    data1[['Дней на распродажи', 'Прошло дней от последней продажи']] = data1[['Дней на распродажи', 'Прошло дней от последней продажи']].apply(lambda x: x.str.replace(' ', '')).replace({'∞': -1}).fillna(0).astype(int)
+    data1['Общый продажи период'] = data1['Средние продажи день'] * days
+    data1['purchase'] = data1.apply(lambda row: row['Общый продажи период'] - row['Остаток на конец'] if row['Дней на распродажи'] < days else 'overstock', axis=1)
+    data1['overstock'] = data1.apply(lambda row: row['Остаток на конец'] - row['Общый продажи период'] if row['purchase'] == 'overstock' else 0, axis=1)
+    data1['outofstock'] = data1.apply(lambda row: row['Прошло дней от последней продажи'] if row['Остаток на конец'] == 0 else 0, axis=1)
+    order = data1[data1['purchase'] != 'overstock'][['Артикул ','Номенклатура','purchase','overstock','outofstock']]
 
     # Save the modified DataFrame to a new Excel file in memory
     output = BytesIO()
@@ -95,32 +69,35 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     output.seek(0)
 
     # Send the modified file back to the user
-    await update.message.reply_document(
-        document=output,
-        filename="order_data.xlsx",
-        caption="Here is your modified Excel file."
-    )
+    await update.message.reply_document(document=output, filename="order_data.xlsx", caption="Here is your modified Excel file.")
     return ConversationHandler.END
 
-# Main function to run the bot
-def main() -> None:
-    application = Application.builder().token(BOT_TOKEN).build()
+# Configure and run the bot using webhooks
+application = Application.builder().token(BOT_TOKEN).build()
+application.add_handler(ConversationHandler(
+    entry_points=[CommandHandler("start", start)],
+    states={
+        ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
+        ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
+        PROCESS_FILE: [MessageHandler(filters.ALL, process_file)],
+    },
+    fallbacks=[],
+))
 
-    # Conversation handler for managing the steps
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
-            ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
-            PROCESS_FILE: [MessageHandler(filters.ALL, process_file)],
-        },
-        fallbacks=[],
-    )
+# Webhook route
+@app.route('/webhook', methods=['POST'])
+async def webhook():
+    update = Update.de_json(request.get_json(), application.bot)
+    await application.process_update(update)
+    return 'OK'
 
-    application.add_handler(conv_handler)
+# Function to set webhook
+async def set_webhook():
+    await application.bot.set_webhook(f"{APP_URL}/webhook")
 
-    # Run the bot
-    application.run_polling()
-
-if __name__ == "__main__":
-    main()
+# Start the Flask app with webhook
+if __name__ == '__main__':
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(set_webhook())
+    app.run(host='0.0.0.0', port=PORT)
