@@ -1,7 +1,6 @@
-
 pandas
-openpyxl
-python-telegram-bot
-xlsxwriter
-os
 flask
+python-telegram-bot[webhooks]
+openpyxl
+xlsxwriter
+
