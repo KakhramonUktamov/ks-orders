@@ -3,15 +3,17 @@ import pandas as pd
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from io import BytesIO
+import requests
 
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Ensure your bot token is set in the environment
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+WEBHOOK_URL = f'https://ks-orders.onrender.com/{BOT_TOKEN}'  # Change this to your Render app URL
+
 
 ASK_FILE, ASK_DAYS = range(2)  # We only need these two states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
-    # Resetting the user data for a new conversation
-    context.user_data.clear()
+    context.user_data.clear()  # Resetting user data
     return ASK_FILE
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -60,22 +62,21 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
 
+
+
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
-            ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
-        },
-        fallbacks=[],
+    # Set up command and message handlers
+    application.add_handler(CommandHandler("start", start))
+    # Add additional handlers...
+
+    # Set webhook
+    application.run_webhook(
+        listen='0.0.0.0', 
+        port=int(os.environ.get('PORT', 5000)), 
+        url_path=BOT_TOKEN
     )
-
-    application.add_handler(conv_handler)
-
-    # Running the bot with long polling
-    application.run_polling()
 
 if __name__ == "__main__":
     main()
