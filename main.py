@@ -10,6 +10,8 @@ ASK_FILE, ASK_DAYS = range(2)  # We only need these two states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
+    # Resetting the user data for a new conversation
+    context.user_data.clear()
     return ASK_FILE
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
