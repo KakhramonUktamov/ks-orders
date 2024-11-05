@@ -31,14 +31,18 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        days_input = update.message.text.strip()
+        # Strip leading/trailing spaces from input and handle commas or unexpected characters
+        days_input = update.message.text.strip().replace(",", "")  # Remove commas if present
         days = int(days_input)  # Convert the cleaned input to an integer
         context.user_data['days'] = days
         await update.message.reply_text(f"Received! Processing your file with an overstock period of {days} days...")
         await process_file(update, context)  # Process the file
         return ConversationHandler.END  # End the conversation
-    except ValueError:
-        await update.message.reply_text("Please enter a valid number for days.")
+    except ValueError as e:
+        # Send a debug message with the exact input received for easier troubleshooting
+        await update.message.reply_text(
+            f"Please enter a valid number for days. (Debug: Received '{update.message.text}')"
+        )
         return ASK_DAYS
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
