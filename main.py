@@ -49,7 +49,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     data1['purchase'] = data1.apply(lambda row: row['Общый продажи период'] - row['Остаток на конец'] if row['Дней на распродажи'] < days else 'overstock', axis=1)
     data1['overstock'] = data1.apply(lambda row: row['Остаток на конец'] - row['Общый продажи период'] if row['purchase'] == 'overstock' else 0, axis=1)
     data1['outofstock'] = data1.apply(lambda row: row['Прошло дней от последней продажи'] if row['Остаток на конец'] == 0 else 0, axis=1)
-    order = data1[data1['purchase'] != 'overstock'][['Артикул ', 'Номенклатура', 'purchase', 'overstock', 'outofstock']]
+    order = data1[['Артикул ', 'Номенклатура', 'purchase', 'overstock', 'outofstock']]
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
