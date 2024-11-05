@@ -1,5 +1,5 @@
-numpy==1.24.0
-pandas==1.5.3
+numpy
+pandas
 python-telegram-bot==20.0
 openpyxl
 XlsxWriter
