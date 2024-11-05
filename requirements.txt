@@ -1,5 +1,5 @@
-pandas
-python-telegram-bot
-openpyxl
-xlsxwriter
+pandas==1.5.3  # or the version you're using
+python-telegram-bot==20.0  # replace with the version you're using
+openpyxl==3.0.10  # specify the version if needed
+XlsxWriter==1.4.4  # specify the version if needed
 
