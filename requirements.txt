@@ -3,3 +3,4 @@ pandas
 python-telegram-bot==20.0
 openpyxl
 XlsxWriter
+requests
