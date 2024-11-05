@@ -6,7 +6,7 @@ from io import BytesIO
 import requests
 
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-WEBHOOK_URL = f'https://ks-orders.onrender.com/{BOT_TOKEN}'  # Change this to your Render app URL
+#WEBHOOK_URL = f'https://ks-orders.onrender.com/{BOT_TOKEN}'  # Change this to your Render app URL
 
 
 ASK_FILE, ASK_DAYS = range(2)  # We only need these two states
@@ -67,16 +67,19 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Set up command and message handlers
-    application.add_handler(CommandHandler("start", start))
-    # Add additional handlers...
-
-    # Set webhook
-    application.run_webhook(
-        listen='0.0.0.0', 
-        port=int(os.environ.get('PORT', 5000)), 
-        url_path=BOT_TOKEN
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
+            ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
+        },
+        fallbacks=[],
     )
+
+    application.add_handler(conv_handler)
+
+    # Run the bot
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
