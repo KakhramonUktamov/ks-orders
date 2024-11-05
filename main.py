@@ -6,7 +6,7 @@ from io import BytesIO
 
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Ensure your bot token is set in the environment
 
-ASK_FILE, ASK_DAYS = range(2)  # Removed PROCESS_FILE as it's not needed
+ASK_FILE, ASK_DAYS = range(2)  # We only need these two states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
@@ -22,12 +22,13 @@ async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         days = int(update.message.text)
         context.user_data['days'] = days
         await update.message.reply_text(f"Received! Processing your file with an overstock period of {days} days...")
-        return await process_file(update, context)
+        await process_file(update, context)  # Call process_file directly
+        return ConversationHandler.END
     except ValueError:
         await update.message.reply_text("Please enter a valid number for days.")
         return ASK_DAYS
 
-async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file = context.user_data['file']
     days = context.user_data['days']
     excel_bytes = BytesIO()
@@ -38,7 +39,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Add your data processing code here
     data.columns = data.iloc[12].values
     data0 = data[15:-2]
-    cols = ['Артикул ','Номенклатура','Дней на распродажи', 'Остаток на конец', 'Средние продажи день', 'Прошло дней от последней продажи']
+    cols = ['Артикул ', 'Номенклатура', 'Дней на распродажи', 'Остаток на конец', 'Средние продажи день', 'Прошло дней от последней продажи']
     data1 = data0[cols].reset_index(drop=True)
 
     # Dropping '-Н' values and cleaning data
@@ -48,7 +49,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     data1['purchase'] = data1.apply(lambda row: row['Общый продажи период'] - row['Остаток на конец'] if row['Дней на распродажи'] < days else 'overstock', axis=1)
     data1['overstock'] = data1.apply(lambda row: row['Остаток на конец'] - row['Общый продажи период'] if row['purchase'] == 'overstock' else 0, axis=1)
     data1['outofstock'] = data1.apply(lambda row: row['Прошло дней от последней продажи'] if row['Остаток на конец'] == 0 else 0, axis=1)
-    order = data1[data1['purchase'] != 'overstock'][['Артикул ','Номенклатура','purchase','overstock','outofstock']]
+    order = data1[data1['purchase'] != 'overstock'][['Артикул ', 'Номенклатура', 'purchase', 'overstock', 'outofstock']]
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -56,7 +57,6 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     output.seek(0)
 
     await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
-    return ConversationHandler.END
 
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
@@ -72,7 +72,8 @@ def main() -> None:
 
     application.add_handler(conv_handler)
 
-    application.run_polling()  # Use long polling instead of a web server
+    # Running the bot with long polling
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
