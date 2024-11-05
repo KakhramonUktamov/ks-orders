@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Restarting the process. Please send me the Excel file you want to process.")
     context.user_data.clear()  # Clear previous data to start fresh
-    return ASK_FILE
+    return ASK_FILE  # Directly transition to ASK_FILE state
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Process canceled. You can start again by typing /start.")
@@ -106,7 +106,7 @@ def main() -> None:
 
     # Set up the conversation handler
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[CommandHandler("start", start), CommandHandler("restart", restart)],
         states={
             ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
