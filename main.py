@@ -4,9 +4,9 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from io import BytesIO
 
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Add your bot token in Heroku Config Vars
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")  # Ensure your bot token is set in the environment
 
-ASK_FILE, ASK_DAYS, PROCESS_FILE = range(3)
+ASK_FILE, ASK_DAYS = range(2)  # Removed PROCESS_FILE as it's not needed
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
@@ -66,7 +66,6 @@ def main() -> None:
         states={
             ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
-            PROCESS_FILE: [MessageHandler(filters.ALL, process_file)],
         },
         fallbacks=[],
     )
