@@ -3,17 +3,15 @@ import pandas as pd
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from io import BytesIO
-import requests
 
+# Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-#WEBHOOK_URL = f'https://ks-orders.onrender.com/{BOT_TOKEN}'  # Change this to your Render app URL
 
-
-ASK_FILE, ASK_DAYS = range(2)  # We only need these two states
+ASK_FILE, ASK_DAYS = range(2)  # Define the states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
-    context.user_data.clear()  # Resetting user data
+    context.user_data.clear()  # Clear any previous user data
     return ASK_FILE
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -23,13 +21,13 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        # Strip leading and trailing spaces from the input
+        # Strip leading/trailing spaces from input
         days_input = update.message.text.strip()
         days = int(days_input)  # Convert the cleaned input to an integer
         context.user_data['days'] = days
         await update.message.reply_text(f"Received! Processing your file with an overstock period of {days} days...")
-        await process_file(update, context)  # Call process_file directly
-        return ConversationHandler.END
+        await process_file(update, context)  # Process the file
+        return ConversationHandler.END  # End the conversation
     except ValueError:
         await update.message.reply_text("Please enter a valid number for days.")
         return ASK_DAYS
@@ -42,7 +40,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     excel_bytes.seek(0)
     data = pd.read_excel(excel_bytes)
 
-    # Add your data processing code here
+    # Data processing logic
     data.columns = data.iloc[12].values
     data0 = data[15:-2]
     cols = ['Артикул ', 'Номенклатура', 'Дней на распродажи', 'Остаток на конец', 'Средние продажи день', 'Прошло дней от последней продажи']
@@ -64,11 +62,10 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
 
-
-
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Set up the conversation handler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -80,7 +77,7 @@ def main() -> None:
 
     application.add_handler(conv_handler)
 
-    # Run the bot
+    # Run the bot using long polling
     application.run_polling()
 
 if __name__ == "__main__":
