@@ -51,7 +51,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     excel_bytes = BytesIO()
     await file.download_to_memory(excel_bytes)
     excel_bytes.seek(0)
-    data = pd.read_excel(excel_bytes)
+    data = pd.read_excel(excel_bytes, None, engine='openpyxl')
 
     # Data processing logic
     data.columns = data.iloc[12].values
