@@ -115,9 +115,13 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             order.to_excel(writer, index=False, sheet_name='Sheet1')
         output.seek(0)
 
+        await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
+
     except Exception as e:
         await update.message.reply_text("An unexpected error occurred while processing the file.")
         print("Processing error:",e)
+
+
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
