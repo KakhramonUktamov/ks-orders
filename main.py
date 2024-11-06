@@ -46,65 +46,73 @@ async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ASK_DAYS
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    file = context.user_data['file']
-    days = context.user_data['days']
-    excel_bytes = BytesIO()
-    await file.download_to_memory(excel_bytes)
-    excel_bytes.seek(0)
-    data = pd.read_excel(excel_bytes, None, engine='openpyxl')
+    try:
+        file = context.user_data['file']
+        days = context.user_data['days']
+        excel_bytes = BytesIO()
+        await file.download_to_memory(excel_bytes)
+        excel_bytes.seek(0)
+        try:
+            data = pd.read_excel(excel_bytes, engine='openpyxl')
+        except ValueError as e:
+            await update.message.reply_text("Error: Unable to read the file as a valid Excel file. Please upload a valid .xlsx file.")
+            print("File read error:", e)
+            return  # Exit the function if the file is not valid
+    
 
-    # Data processing logic
-    data.columns = data.iloc[12].values
-    data0 = data[15:]
-    data0 = data0[:-2]
+        # Data processing logic
+        data.columns = data.iloc[12].values
+        data0 = data[15:]
+        data0 = data0[:-2]
 
-    cols = ['Артикул ','Номенклатура','Дней на распродажи',
-            'Остаток на конец','Средние продажи день',
-           'Прошло дней от последней продажи']
+        cols = ['Артикул ','Номенклатура','Дней на распродажи',
+                'Остаток на конец','Средние продажи день',
+               'Прошло дней от последней продажи']
 
-    data1 = data0[cols]       
-    data1 = data1.reset_index(drop=True)
+        data1 = data0[cols]       
+        data1 = data1.reset_index(drop=True)
 
-    #dropping -H this kinda values:
-    for_drop =[]
-    for index,i in enumerate(data1['Артикул ']):
-        if "-Н" in i:
-            for_drop.append(index)
-    data1 = data1.drop(for_drop,axis=0) 
+        #dropping -H this kinda values:
+        for_drop =[]
+        for index,i in enumerate(data1['Артикул ']):
+            if "-Н" in i:
+                for_drop.append(index)
+        data1 = data1.drop(for_drop,axis=0) 
 
-    #dealing with numbers of selling days
-    data1['Дней на распродажи'] = data1['Дней на распродажи'].str.replace(' ','')
-    data1['Прошло дней от последней продажи']=data1['Прошло дней от последней продажи'].str.replace(' ','')
-    data1 = data1.replace({'∞':-1})
-    data1 = data1.fillna(0)
-    data1[['Дней на распродажи','Прошло дней от последней продажи']] = data1[['Дней на распродажи','Прошло дней от последней продажи']].astype(int)
-    data1 = data1.reset_index(drop=True)
+        #dealing with numbers of selling days
+        data1['Дней на распродажи'] = data1['Дней на распродажи'].str.replace(' ','')
+        data1['Прошло дней от последней продажи']=data1['Прошло дней от последней продажи'].str.replace(' ','')
+        data1 = data1.replace({'∞':-1})
+        data1 = data1.fillna(0)
+        data1[['Дней на распродажи','Прошло дней от последней продажи']] = data1[['Дней на распродажи','Прошло дней от последней продажи']].astype(int)
+        data1 = data1.reset_index(drop=True)
 
-    data1['Общый продажи период'] = data1['Средние продажи день']*days
-    data1['purchase'] = 0
-    data1['overstock'] = 0
-    data1['outofstock'] = 0
+        data1['Общый продажи период'] = data1['Средние продажи день']*days
+        data1['purchase'] = 0
+        data1['overstock'] = 0
+        data1['outofstock'] = 0
 
-    for i, value in enumerate(data1['Дней на распродажи']):
-        if value<days and value>=0:
-            data1.loc[i,'purchase'] = data1.loc[i,'Общый продажи период'] - data1.loc[i,'Остаток на конец']
-        else:
-            data1.loc[i,'purchase'] = 'overstock'
-            data1.loc[i,'overstock'] = data1.loc[i,'Остаток на конец'] - data1.loc[i,'Общый продажи период']
+        for i, value in enumerate(data1['Дней на распродажи']):
+            if value<days and value>=0:
+                data1.loc[i,'purchase'] = data1.loc[i,'Общый продажи период'] - data1.loc[i,'Остаток на конец']
+            else:
+                data1.loc[i,'purchase'] = 'overstock'
+                data1.loc[i,'overstock'] = data1.loc[i,'Остаток на конец'] - data1.loc[i,'Общый продажи период']
             
-    for i, value in enumerate(data1['Остаток на конец']):
-        if value == 0:
-            data1.loc[i,'outofstock'] = data1.loc[i,'Прошло дней от последней продажи']
-    order= data1[['Артикул ','Номенклатура','purchase','overstock','outofstock']]
+        for i, value in enumerate(data1['Остаток на конец']):
+            if value == 0:
+                data1.loc[i,'outofstock'] = data1.loc[i,'Прошло дней от последней продажи']
+        order= data1[['Артикул ','Номенклатура','purchase','overstock','outofstock']]
 
 
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        order.to_excel(writer, index=False, sheet_name='Sheet1')
-    output.seek(0)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            order.to_excel(writer, index=False, sheet_name='Sheet1')
+        output.seek(0)
 
-    await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
-
+    except Exception as e:
+        await update.message.reply_text("An unexpected error occurred while processing the file.")
+        print("Processing error:",e)
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
