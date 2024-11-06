@@ -73,12 +73,8 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1 = data1.reset_index(drop=True)
 
         # Dropping '-H' values
-        for_drop = []
-        for index, i in enumerate(data1['Артикул ']):
-            if "-Н" in i:
-                for_drop.append(index)
-        data1 = data1.drop(for_drop, axis=0)
-
+        data1 = data1.drop(data1[data1['Артикул '].astype(str).str.contains("-Н", na=False)].index)
+        
         # Dealing with numbers of selling days
         data1['Дней на распродажи'] = data1['Дней на распродажи'].str.replace(' ', '')
         data1['Прошло дней от последней продажи'] = data1['Прошло дней от последней продажи'].str.replace(' ', '')
