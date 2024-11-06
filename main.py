@@ -53,7 +53,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await file.download_to_memory(excel_bytes)
         excel_bytes.seek(0)
         try:
-            data = pd.read_excel(excel_bytes, engine='openpyxl')
+            data = pd.read_excel(excel_bytes)
         except ValueError as e:
             await update.message.reply_text("Error: Unable to read the file as a valid Excel file. Please upload a valid .xlsx file.")
             print("File read error:", e)
