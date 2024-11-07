@@ -43,9 +43,6 @@ async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.message.reply_text("Этот бренд Ламинат?", reply_markup=reply_markup)
         return ASK_BRAND
         
-        await update.message.reply_text(f"Received! Processing your file with an overstock period of {days} days...")
-        await process_file(update, context)  # Process the file
-        return ConversationHandler.END  # End the conversation
     except ValueError as e:
         # Send a debug message with the exact input received for easier troubleshooting
         await update.message.reply_text(
