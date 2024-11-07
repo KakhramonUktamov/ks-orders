@@ -10,23 +10,23 @@ BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ASK_FILE, ASK_DAYS, ASK_BRAND = range(3)  # Define the states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
+    await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
     context.user_data.clear()  # Clear any previous user data
     return ASK_FILE
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Restarting the process. Please send me the Excel file you want to process.")
+    await update.message.reply_text("Перезапуск процесса. Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
     context.user_data.clear()  # Clear previous data to start fresh
     return ASK_FILE  # Directly transition to ASK_FILE state
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Process canceled. You can start again by typing /start.")
+    await update.message.reply_text("Процесс отменен. Вы можете начать заново, набрав /start.")
     context.user_data.clear()  # Clear any data in case they want to start again
     return ConversationHandler.END
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['file'] = await update.message.document.get_file()
-    await update.message.reply_text("Now, please enter the number of days for overstock:")
+    await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
     return ASK_DAYS
 
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -46,7 +46,7 @@ async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     except ValueError as e:
         # Send a debug message with the exact input received for easier troubleshooting
         await update.message.reply_text(
-            f"Please enter a valid number for days. (Debug: Received '{update.message.text}')"
+            f"Пожалуйста, введите допустимое число для дней. (Отладка: получено '{update.message.text}')"
         )
         return ASK_DAYS
 
@@ -57,10 +57,10 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Check user's choice and set a flag in user_data
     if query.data == "yes":
         context.user_data['is_laminate'] = True
-        await query.edit_message_text("Processing as Laminate brand with feature matching.")
+        await query.edit_message_text("Обработка как бренд ламината с подбором характеристик.")
     else:
         context.user_data['is_laminate'] = False
-        await query.edit_message_text("Processing without feature matching.")
+        await query.edit_message_text("Обработка без подбора характеристик.")
     
     # Proceed to file processing
     await process_file(update, context)
@@ -82,7 +82,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         try:
             data = pd.read_excel(excel_bytes)
         except ValueError as e:
-            await message.reply_text("Error: Unable to read the file as a valid Excel file. Please upload a valid .xlsx file.")
+            await message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
             print("File read error:", e)
             return  # Exit the function if the file is not valid
     
@@ -141,22 +141,33 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return "No Match"
 
         # Apply the function to the column containing text (e.g., 'Description')
-        data1['Class'] = data1['Номенклатура'].apply(find_feature)
+        data1['Collection'] = data1['Номенклатура'].apply(find_feature)
 
-                                                            
-        #Select final columns for output
-        order = data1[['Артикул ', 'Номенклатура','Class', 'purchase', 'overstock', 'outofstock']]
+        # Separate DataFrames for each sheet
+        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]
+        overstock_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'overstock']]
+        outofstock_df = data1[['Артикул ', 'Номенклатура', 'outofstock']]
 
+        # Add USD calculation column to outofstock_df
+        outofstock_df['USD of outofstock'] = outofstock_df['outofstock'] * 1  # Multiplied by E1 value placeholder
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            order.to_excel(writer, index=False, sheet_name='Sheet1')
+            # Write each DataFrame to its respective sheet
+            purchase_df.to_excel(writer, sheet_name='Purchase', index=False)
+            overstock_df.to_excel(writer, sheet_name='Overstock', index=False)
+            outofstock_df.to_excel(writer, sheet_name='OutOfStock', index=False)
+
+            # Access the OutOfStock sheet to add fixed E1 value
+            workbook = writer.book
+            worksheet = writer.sheets['OutOfStock']
+            worksheet.write('E1', 1)  # Fixed cell value for USD multiplier
         output.seek(0)
 
-        await message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
+        await message.reply_document(document=output, filename="processed_data.xlsx", caption="Вот ваш обработанный файл.")
 
     except Exception as e:
-        await message.reply_text("An unexpected error occurred while processing the file.")
+        await message.reply_text("Произошла непредвиденная ошибка при обработке файла.")
         print("Processing error:",e)
 
 
