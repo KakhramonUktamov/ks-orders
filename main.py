@@ -168,7 +168,7 @@ def main() -> None:
         states={
             ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
-            ASK_BRAND: [MessageHandler(CallbackQueryHandler(handle_brand))],
+            ASK_BRAND: [CallbackQueryHandler(handle_brand)],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("restart", restart)],  # Adding fallbacks for /cancel and /restart
     )
