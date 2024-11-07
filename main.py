@@ -67,6 +67,9 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Identify if we have an update from a callback query or a regular message
+    message = update.message if update.message else update.callback_query.message
+    
     try:
         file = context.user_data['file']
         days = context.user_data['days']
@@ -79,7 +82,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         try:
             data = pd.read_excel(excel_bytes)
         except ValueError as e:
-            await update.message.reply_text("Error: Unable to read the file as a valid Excel file. Please upload a valid .xlsx file.")
+            await message.reply_text("Error: Unable to read the file as a valid Excel file. Please upload a valid .xlsx file.")
             print("File read error:", e)
             return  # Exit the function if the file is not valid
     
@@ -149,10 +152,10 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             order.to_excel(writer, index=False, sheet_name='Sheet1')
         output.seek(0)
 
-        await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
+        await message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
 
     except Exception as e:
-        await update.message.reply_text("An unexpected error occurred while processing the file.")
+        await message.reply_text("An unexpected error occurred while processing the file.")
         print("Processing error:",e)
 
 
