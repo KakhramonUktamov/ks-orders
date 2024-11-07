@@ -117,7 +117,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1['outofstock'] = 0
 
         for i, value in enumerate(data1['Дней на распродажи']):
-            if value < days and value >= 0:
+            if value <= days and value >= 0:
                 # Calculate purchase as float
                 data1.loc[i, 'purchase'] = float(data1.loc[i, 'Общый продажи период'] - data1.loc[i, 'Остаток на конец'])
             else:
