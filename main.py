@@ -126,8 +126,9 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 data1.loc[i, 'overstock'] = float(data1.loc[i, 'Остаток на конец'] - data1.loc[i, 'Общый продажи период'])
 
         for i, value in enumerate(data1['Остаток на конец']):
-            if value == 0:
-                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день']
+            if value <= 50:
+                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день'] - data1.loc[i, 'Остаток на конец']
+                
 
         #making a class column 
         features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
