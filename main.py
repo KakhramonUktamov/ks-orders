@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 
 # Retrieve the bot token from environment variables
@@ -168,7 +168,7 @@ def main() -> None:
         states={
             ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
-            ASK_BRAND: [MessageHandler(filters.CallbackQueryHandler(handle_brand))],
+            ASK_BRAND: [MessageHandler(CallbackQueryHandler(handle_brand))],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("restart", restart)],  # Adding fallbacks for /cancel and /restart
     )
