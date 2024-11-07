@@ -149,7 +149,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         outofstock_df = data1[['Артикул ', 'Номенклатура', 'outofstock']]
 
         # Add USD calculation column to outofstock_df
-        outofstock_df['USD of outofstock'] = outofstock_df['outofstock'] * 1  # Multiplied by E1 value placeholder
+        outofstock_df['USD of outofstock'] = ''  # Multiplied by E1 value placeholder
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -162,6 +162,12 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             workbook = writer.book
             worksheet = writer.sheets['OutOfStock']
             worksheet.write('E1', 1)  # Fixed cell value for USD multiplier
+
+            # Write the formula for each row in the 'USD of outofstock' column
+            for row_num in range(1, len(outofstock_df) + 1):
+                formula = f'=C{row_num + 1}*$E$1'  # C column for outofstock, $E$1 for fixed value
+                worksheet.write_formula(row_num, 3, formula)  # Write formula in D column (USD of outofstock)
+
         output.seek(0)
 
         await message.reply_document(document=output, filename="processed_data.xlsx", caption="Вот ваш обработанный файл.")
