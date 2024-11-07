@@ -7,7 +7,7 @@ from io import BytesIO
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-ASK_FILE, ASK_DAYS = range(2)  # Define the states
+ASK_FILE, ASK_DAYS, ASK_BRAND = range(3)  # Define the states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Hi! Please send me the Excel file you want to process.")
@@ -32,9 +32,17 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         # Strip leading/trailing spaces from input and handle commas or unexpected characters
-        days_input = update.message.text.strip().replace(",", "")  # Remove commas if present
+        days_input = update.message.text.strip() # Remove commas if present
         days = int(days_input)  # Convert the cleaned input to an integer
         context.user_data['days'] = days
+
+        keyboard = [
+            [InlineKeyboardButton("Да", callback_data="yes"), InlineKeyboardButton("Нет", callback_data="no")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Этот бренд Ламинат?", reply_markup=reply_markup)
+        return ASK_BRAND
+        
         await update.message.reply_text(f"Received! Processing your file with an overstock period of {days} days...")
         await process_file(update, context)  # Process the file
         return ConversationHandler.END  # End the conversation
@@ -45,13 +53,32 @@ async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return ASK_DAYS
 
+async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    
+    # Check user's choice and set a flag in user_data
+    if query.data == "yes":
+        context.user_data['is_laminate'] = True
+        await query.edit_message_text("Processing as Laminate brand with feature matching.")
+    else:
+        context.user_data['is_laminate'] = False
+        await query.edit_message_text("Processing without feature matching.")
+    
+    # Proceed to file processing
+    await process_file(update, context)
+    return ConversationHandler.END
+
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         file = context.user_data['file']
         days = context.user_data['days']
+        is_laminate = context.user_data.get('is_laminate', False)
+        
         excel_bytes = BytesIO()
         await file.download_to_memory(excel_bytes)
         excel_bytes.seek(0)
+        
         try:
             data = pd.read_excel(excel_bytes)
         except ValueError as e:
@@ -100,10 +127,24 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         for i, value in enumerate(data1['Остаток на конец']):
             if value == 0:
-                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи']
+                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.iloc[i, 'Средние продажи день']
 
+        #making a class column 
+        def find_feature(text):
+            for feature in features:
+                if pd.notna(text) and feature in text:
+                    return feature
+            return "No Match"
+
+        features = ['EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
+                    'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
+                    'BLU','BLA','AMB']
+        # Apply the function to the column containing text (e.g., 'Description')
+        data1['Class'] = data['Номенклатура'].apply(find_feature)
+
+                                                            
         #Select final columns for output
-        order = data1[['Артикул ', 'Номенклатура', 'purchase', 'overstock', 'outofstock']]
+        order = data1[['Артикул ', 'Номенклатура','Class', 'purchase', 'overstock', 'outofstock']]
 
 
         output = BytesIO()
@@ -127,6 +168,7 @@ def main() -> None:
         states={
             ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
+            ASK_BRAND: [MessageHandler(filters.CallbackQueryHandler(handle_brand))],
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("restart", restart)],  # Adding fallbacks for /cancel and /restart
     )
