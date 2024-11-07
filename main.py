@@ -127,20 +127,21 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         for i, value in enumerate(data1['Остаток на конец']):
             if value == 0:
-                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.iloc[i, 'Средние продажи день']
+                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день']
 
         #making a class column 
+        features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
+                    'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
+                    'BLU','BLA','AMB']
+
         def find_feature(text):
             for feature in features:
                 if pd.notna(text) and feature in text:
                     return feature
             return "No Match"
 
-        features = ['EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
-                    'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
-                    'BLU','BLA','AMB']
         # Apply the function to the column containing text (e.g., 'Description')
-        data1['Class'] = data['Номенклатура'].apply(find_feature)
+        data1['Class'] = data1['Номенклатура'].apply(find_feature)
 
                                                             
         #Select final columns for output
