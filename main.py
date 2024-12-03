@@ -62,7 +62,6 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     else:
         context.user_data['is_laminate'] = False
         await query.edit_message_text("Обработка без подбора характеристик.")
-        return ASK_DAYS  # Proceed with the regular days input
         
     # Proceed to file processing
     await process_file(update, context)
