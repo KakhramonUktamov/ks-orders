@@ -7,7 +7,7 @@ from io import BytesIO
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-ASK_FILE, ASK_DAYS, ASK_BRAND = range(3)  # Define the states
+ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
@@ -57,14 +57,43 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # Check user's choice and set a flag in user_data
     if query.data == "yes":
         context.user_data['is_laminate'] = True
-        await query.edit_message_text("Обработка как бренд ламината с подбором характеристик.")
+        await query.edit_message_text("Обработка как бренд ламината. Пожалуйста, введите процент корректировки (от 0 до 1):")
+        return ASK_PERCENTAGE  # Ask for the percentage if it's Laminate
     else:
         context.user_data['is_laminate'] = False
         await query.edit_message_text("Обработка без подбора характеристик.")
-    
+        return ASK_DAYS  # Proceed with the regular days input
+        
     # Proceed to file processing
     await process_file(update, context)
     return ConversationHandler.END
+
+async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    try:
+        # Get the percentage from user input
+        percentage = float(update.message.text.strip())
+
+        # Check if the percentage is between 0 and 1
+        if 0 <= percentage <= 1:
+            context.user_data['percentage'] = percentage
+            await update.message.reply_text(f"Процент принят: {percentage}. Продолжаем обработку с обновленными данными.")
+            
+            # Adjust the average daily sales if it's Laminate
+            if context.user_data.get('is_laminate', False):
+                # Adjusting the average daily sales based on the percentage
+                data1 = context.user_data['file']  # Assuming this is your dataframe
+                data1['Средние продажи день'] *= percentage  # Modify the daily sales
+
+            # Proceed with further processing
+            await process_file(update, context)
+            return ConversationHandler.END
+        else:
+            await update.message.reply_text("Пожалуйста, введите корректный процент от 0 до 1.")
+            return ASK_PERCENTAGE  # Stay in the same state until valid input
+    except ValueError:
+        await update.message.reply_text("Пожалуйста, введите допустимое число для процента.")
+        return ASK_PERCENTAGE
+
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Identify if we have an update from a callback query or a regular message
@@ -111,6 +140,11 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1 = data1.reset_index(drop=True)
 
         # Ensure numerical columns are float-compatible
+        if is_laminate:
+            # Adjust the average daily sales if it's Laminate
+            percentage = context.user_data.get('percentage', 1)  # Default to 1 if no percentage is provided
+            data1['Средние продажи день'] *= percentage  # Adjust daily sales based on the percentage
+
         data1['Общый продажи период'] = data1['Средние продажи день'] * days
         data1['purchase'] = 0.0  # Set as float to allow numerical and 'overstock' entries
         data1['overstock'] = 0.0
@@ -144,8 +178,11 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Apply the function to the column containing text (e.g., 'Description')
         data1['Collection'] = data1['Номенклатура'].apply(find_feature)
 
-        # Separate DataFrames for each sheet
+        # Creating the `purchase_df` with the necessary columns
         purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]
+        # Add the `on_the_way` column with a default value of 0
+        purchase_df['on_the_way'] = 0  # Default value of 0 for all rows
+        #Separate DataFrames for each sheet]
         overstock_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'overstock']]
         outofstock_df = data1[['Артикул ', 'Номенклатура', 'outofstock']]
 
@@ -163,11 +200,16 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             workbook = writer.book
             worksheet = writer.sheets['OutOfStock']
             worksheet.write('E1', 1)  # Fixed cell value for USD multiplier
+            worksheet1 = writer.sheets["Purchase"]
 
             # Write the formula for each row in the 'USD of outofstock' column
             for row_num in range(1, len(outofstock_df) + 1):
                 formula = f'=C{row_num + 1}*$E$1'  # C column for outofstock, $E$1 for fixed value
                 worksheet.write_formula(row_num, 3, formula)  # Write formula in D column (USD of outofstock)
+            
+            # Write formulas to `total_purchase` column for dynamic calculation
+            for row_num in range(1, len(purchase_df) + 1):  # Starting from row 1 to avoid headers
+                worksheet1.write_formula(row_num, 3, f'=C{row_num + 1} - D{row_num + 1}')  # C = purchase, D = on_the_way, result in E = total_purchase
 
         output.seek(0)
 
