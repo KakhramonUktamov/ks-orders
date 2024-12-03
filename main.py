@@ -62,10 +62,7 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     else:
         context.user_data['is_laminate'] = False
         await query.edit_message_text("Обработка без подбора характеристик.")
-        
-    # Proceed to file processing
-    await process_file(update, context)
-    return ConversationHandler.END
+        return ASK_DAYS
 
 async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
