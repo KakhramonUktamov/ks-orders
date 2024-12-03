@@ -226,6 +226,7 @@ def main() -> None:
             ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
             ASK_BRAND: [CallbackQueryHandler(handle_brand)],
+            ASK_PERCENTAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_percentage)], 
         },
         fallbacks=[CommandHandler("cancel", cancel), CommandHandler("restart", restart)],  # Adding fallbacks for /cancel and /restart
     )
