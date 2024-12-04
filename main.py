@@ -25,9 +25,23 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['file'] = await update.message.document.get_file()
-    await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
-    return ASK_DAYS
+    # Download file and convert it to pandas DataFrame
+    file = await update.message.document.get_file()
+    excel_bytes = BytesIO()
+    await file.download_to_memory(excel_bytes)
+    excel_bytes.seek(0)
+    
+    try:
+        # Load the data into a DataFrame and store it
+        data = pd.read_excel(excel_bytes)
+        context.user_data['data'] = data  # Store the DataFrame for further processing
+        await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
+        return ASK_DAYS
+    except ValueError as e:
+        await update.message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
+        print("File read error:", e)
+        return ASK_FILE  # Stay in the same state if file reading fails
+
 
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
@@ -66,24 +80,27 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        percentage = float(update.message.text.strip())  # Get the percentage from user input
+        # Get the percentage from user input
+        percentage = float(update.message.text.strip())
 
+        # Check if the percentage is between 0 and 1
         if 0 <= percentage <= 1:
             context.user_data['percentage'] = percentage
             await update.message.reply_text(f"Процент принят: {percentage}. Продолжаем обработку с обновленными данными.")
 
-            if context.user_data.get('is_laminate', False):
-                # Ensure the DataFrame is loaded and then apply the percentage
-                data1 = context.user_data.get('data')  # Correctly access the pandas DataFrame
-                if data1 is not None:
-                    data1['Средние продажи день'] *= percentage  # Adjust average daily sales
-                else:
-                    await update.message.reply_text("Ошибка: данные не были загружены.")
-                    return ConversationHandler.END
+            # Retrieve the DataFrame stored earlier in handle_file
+            data1 = context.user_data.get('data')  # Now the data is available here
+            if data1 is not None:
+                # Adjust the average daily sales if it's Laminate
+                if context.user_data.get('is_laminate', False):
+                    data1['Средние продажи день'] *= percentage  # Modify the daily sales
 
-            # Proceed with further processing
-            await process_file(update, context)
-            return ConversationHandler.END
+                # Proceed with further processing
+                await process_file(update, context)
+                return ConversationHandler.END
+            else:
+                await update.message.reply_text("Ошибка: данные не были загружены.")
+                return ConversationHandler.END
         else:
             await update.message.reply_text("Пожалуйста, введите корректный процент от 0 до 1.")
             return ASK_PERCENTAGE  # Stay in the same state until valid input
@@ -98,20 +115,12 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     message = update.message if update.message else update.callback_query.message
     
     try:
-        file = context.user_data['file']
-        days = context.user_data['days']
-        is_laminate = context.user_data.get('is_laminate', False)
-        
-        excel_bytes = BytesIO()
-        await file.download_to_memory(excel_bytes)
-        excel_bytes.seek(0)
-        
-        try:
-            data = pd.read_excel(excel_bytes)
-        except ValueError as e:
-            await message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
-            print("File read error:", e)
-            return  # Exit the function if the file is not valid
+       # Access the stored file and DataFrame from user_data
+        data1 = context.user_data.get('data')  # This is the pandas DataFrame already stored
+
+        if data1 is None:
+            await message.reply_text("Ошибка: Данные не были загружены.")
+            return ConversationHandler.END  # Exit if data is not available
     
 
         # Data processing logic
@@ -138,6 +147,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1 = data1.reset_index(drop=True)
 
         # Ensure numerical columns are float-compatible
+        is_laminate = context.user_data.get('is_laminate', False)
         if is_laminate:
             # Adjust the average daily sales if it's Laminate
             percentage = context.user_data.get('percentage', 1)  # Default to 1 if no percentage is provided
