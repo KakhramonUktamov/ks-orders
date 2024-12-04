@@ -184,7 +184,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             # Apply the function to the column containing text (e.g., 'Description')
             data1['Collection'] = data1['Номенклатура'].apply(find_feature)
             # Creating the `purchase_df` with the necessary columns
-            purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]
+            purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]d
             # Add the `on_the_way` column with a default value of 0
         purchase_df['on_the_way'] = 0  # Default value of 0 for all rows
         #Separate DataFrames for each sheet]
@@ -214,7 +214,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             
             # Write formulas to `total_purchase` column for dynamic calculation
             for row_num in range(1, len(purchase_df) + 1):  # Starting from row 1 to avoid headers
-                worksheet1.write_formula(row_num, 3, f'=C{row_num + 1} - D{row_num + 1}')  # C = purchase, D = on_the_way, result in E = total_purchase
+                worksheet1.write_formula(row_num, 5, f'=D{row_num + 1} - E{row_num + 1}')  # C = purchase, D = on_the_way, result in E = total_purchase
 
         output.seek(0)
 
