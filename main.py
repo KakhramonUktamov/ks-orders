@@ -85,22 +85,12 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         # Check if the percentage is between 0 and 1
         if 0 <= percentage <= 1:
-            context.user_data['percentage'] = percentage
+            context.user_data['percentage'] = percentage  # Store percentage for later use
             await update.message.reply_text(f"Процент принят: {percentage}. Продолжаем обработку с обновленными данными.")
-
-            # Retrieve the DataFrame stored earlier in handle_file
-            data1 = context.user_data.get('data')  # Now the data is available here
-            if data1 is not None:
-                # Adjust the average daily sales if it's Laminate
-                if context.user_data.get('is_laminate', False):
-                    data1['Средние продажи день'] *= percentage  # Modify the daily sales
-
-                # Proceed with further processing
-                await process_file(update, context)
-                return ConversationHandler.END
-            else:
-                await update.message.reply_text("Ошибка: данные не были загружены.")
-                return ConversationHandler.END
+            
+            # Proceed with further processing
+            await process_file(update, context)
+            return ConversationHandler.END
         else:
             await update.message.reply_text("Пожалуйста, введите корректный процент от 0 до 1.")
             return ASK_PERCENTAGE  # Stay in the same state until valid input
@@ -117,12 +107,15 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
        # Access the stored file and DataFrame from user_data
         data1 = context.user_data.get('data')  # This is the pandas DataFrame already stored
-
+        percentage = 0
         if data1 is None:
             await message.reply_text("Ошибка: Данные не были загружены.")
             return ConversationHandler.END  # Exit if data is not available
     
-
+        
+        
+            # Adjust daily sales based on the percentage
+            
         # Data processing logic
         data.columns = data.iloc[12].values
         data0 = data[15:]
@@ -146,17 +139,20 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1[['Дней на распродажи', 'Прошло дней от последней продажи']] = data1[['Дней на распродажи', 'Прошло дней от последней продажи']].astype(int)
         data1 = data1.reset_index(drop=True)
 
-        # Ensure numerical columns are float-compatible
-        is_laminate = context.user_data.get('is_laminate', False)
-        if is_laminate:
-            # Adjust the average daily sales if it's Laminate
-            percentage = context.user_data.get('percentage', 1)  # Default to 1 if no percentage is provided
-            data1['Средние продажи день'] *= percentage  # Adjust daily sales based on the percentage
-
         data1['Общый продажи период'] = data1['Средние продажи день'] * days
         data1['purchase'] = 0.0  # Set as float to allow numerical and 'overstock' entries
         data1['overstock'] = 0.0
         data1['outofstock'] = 0
+        
+        # Ensure numerical columns are float-compatible
+        is_laminate = context.user_data.get('is_laminate', False)
+        if is_laminate:
+            # Adjust the average daily sales if it's Laminate
+            percentage = context.user_data.get('percentage', 1) # Default to 1 if no percentage is provided
+            data1['Общый продажи период'] = data1['Средние продажи день'] * days * percentage
+            #making a class column 
+        
+        
 
         for i, value in enumerate(data1['Дней на распродажи']):
             if value <= days and value >= 0:
@@ -171,11 +167,9 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             if value <= 50:
                 data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день'] - data1.loc[i, 'Остаток на конец']
                 
-
-        #making a class column 
         features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
-                    'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
-                    'BLU','BLA','AMB']
+                        'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
+                        'BLU','BLA','AMB']
 
         def find_feature(text):
             for feature in features:
@@ -185,7 +179,6 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Apply the function to the column containing text (e.g., 'Description')
         data1['Collection'] = data1['Номенклатура'].apply(find_feature)
-
         # Creating the `purchase_df` with the necessary columns
         purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]
         # Add the `on_the_way` column with a default value of 0
