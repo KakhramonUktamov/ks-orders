@@ -148,7 +148,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1['purchase'] = 0.0  # Set as float to allow numerical and 'overstock' entries
         data1['overstock'] = 0.0
         data1['outofstock'] = 0
-        data1['on_the_way'] = 0
+        data1['В путе'] = 0
         
         # Ensure numerical columns are float-compatible
         if is_laminate:
@@ -171,7 +171,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             if value <= 50:
                 data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день']*percentage - data1.loc[i, 'Остаток на конец']
 
-        data1['total_purchase'] = 'purchase - on_the_way'
+        data1['Заказ'] = 'purchase - on_the_way'
 
         features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
                     'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
@@ -186,7 +186,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Apply the function to the column containing text (e.g., 'Description')
         data1['Collection'] = data1['Номенклатура'].apply(find_feature)
         # Creating the `purchase_df` with the necessary columns
-        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase','on_the_way','total_purchase']]
+        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase','В путе','Заказ']]
         # Add the `on_the_way` column with a default value of 0
         
         #Separate DataFrames for each sheet]
