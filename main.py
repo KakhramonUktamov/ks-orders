@@ -66,19 +66,20 @@ async def handle_brand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        # Get the percentage from user input
-        percentage = float(update.message.text.strip())
+        percentage = float(update.message.text.strip())  # Get the percentage from user input
 
-        # Check if the percentage is between 0 and 1
         if 0 <= percentage <= 1:
             context.user_data['percentage'] = percentage
             await update.message.reply_text(f"Процент принят: {percentage}. Продолжаем обработку с обновленными данными.")
-            
-            # Adjust the average daily sales if it's Laminate
+
             if context.user_data.get('is_laminate', False):
-                # Adjusting the average daily sales based on the percentage
-                data1 = context.user_data['file']  # Assuming this is your dataframe
-                data1['Средние продажи день'] *= percentage  # Modify the daily sales
+                # Ensure the DataFrame is loaded and then apply the percentage
+                data1 = context.user_data.get('data')  # Correctly access the pandas DataFrame
+                if data1 is not None:
+                    data1['Средние продажи день'] *= percentage  # Adjust average daily sales
+                else:
+                    await update.message.reply_text("Ошибка: данные не были загружены.")
+                    return ConversationHandler.END
 
             # Proceed with further processing
             await process_file(update, context)
@@ -89,6 +90,7 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except ValueError:
         await update.message.reply_text("Пожалуйста, введите допустимое число для процента.")
         return ASK_PERCENTAGE
+
 
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
