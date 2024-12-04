@@ -111,6 +111,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data = context.user_data.get('data')  # This is the pandas DataFrame already stored
         days = context.user_data.get('days')
         is_laminate = context.user_data.get('is_laminate', False)
+        percentage = context.user_data.get('percentage', 1)
         
         if data is None:
             await message.reply_text("Ошибка: Данные не были загружены.")
@@ -152,7 +153,6 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Ensure numerical columns are float-compatible
         if is_laminate:
             # Adjust the average daily sales if it's Laminate
-            percentage = context.user_data.get('percentage', 1) # Default to 1 if no percentage is provided
             data1['Общый продажи период'] = data1['Средние продажи день'] * days * percentage
             #making a class column 
         
@@ -164,12 +164,12 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 data1.loc[i, 'purchase'] = float(data1.loc[i, 'Общый продажи период'] - data1.loc[i, 'Остаток на конец'])
             else:
                 # Set 'overstock' string, handled by float-compatible column
-                data1.loc[i, 'purchase'] = 'overstock'
+                data1.loc[i, 'purchase'] = 0
                 data1.loc[i, 'overstock'] = float(data1.loc[i, 'Остаток на конец'] - data1.loc[i, 'Общый продажи период'])
 
         for i, value in enumerate(data1['Остаток на конец']):
             if value <= 50:
-                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день'] - data1.loc[i, 'Остаток на конец']
+                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день']*percentage - data1.loc[i, 'Остаток на конец']
 
         data1['total_purchase'] = 'purchase - on_the_way'
 
