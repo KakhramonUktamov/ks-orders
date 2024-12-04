@@ -106,9 +106,11 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     try:
        # Access the stored file and DataFrame from user_data
-        data1 = context.user_data.get('data')  # This is the pandas DataFrame already stored
-        percentage = 0
-        if data1 is None:
+        data = context.user_data.get('data')  # This is the pandas DataFrame already stored
+        days = context.user_data.get('days')
+        is_laminate = context.user_data.get('is_laminate', False)
+        
+        if data is None:
             await message.reply_text("Ошибка: Данные не были загружены.")
             return ConversationHandler.END  # Exit if data is not available
     
@@ -145,7 +147,6 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1['outofstock'] = 0
         
         # Ensure numerical columns are float-compatible
-        is_laminate = context.user_data.get('is_laminate', False)
         if is_laminate:
             # Adjust the average daily sales if it's Laminate
             percentage = context.user_data.get('percentage', 1) # Default to 1 if no percentage is provided
@@ -166,22 +167,25 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         for i, value in enumerate(data1['Остаток на конец']):
             if value <= 50:
                 data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день'] - data1.loc[i, 'Остаток на конец']
-                
-        features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
+
+        
+        purchase_df = data1[['Артикул ', 'Номенклатура','purchase']]
+        if is_laminate:
+            features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
                         'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
                         'BLU','BLA','AMB']
 
-        def find_feature(text):
-            for feature in features:
-                if pd.notna(text) and feature in text:
-                    return feature
-            return "No Match"
+            def find_feature(text):
+                for feature in features:
+                    if pd.notna(text) and feature in text:
+                        return feature
+                return "No Match"
 
-        # Apply the function to the column containing text (e.g., 'Description')
-        data1['Collection'] = data1['Номенклатура'].apply(find_feature)
-        # Creating the `purchase_df` with the necessary columns
-        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]
-        # Add the `on_the_way` column with a default value of 0
+            # Apply the function to the column containing text (e.g., 'Description')
+            data1['Collection'] = data1['Номенклатура'].apply(find_feature)
+            # Creating the `purchase_df` with the necessary columns
+            purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]
+            # Add the `on_the_way` column with a default value of 0
         purchase_df['on_the_way'] = 0  # Default value of 0 for all rows
         #Separate DataFrames for each sheet]
         overstock_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'overstock']]
