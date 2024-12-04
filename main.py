@@ -145,6 +145,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1['purchase'] = 0.0  # Set as float to allow numerical and 'overstock' entries
         data1['overstock'] = 0.0
         data1['outofstock'] = 0
+        data1['on_the_way'] = 0
         
         # Ensure numerical columns are float-compatible
         if is_laminate:
@@ -168,25 +169,24 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             if value <= 50:
                 data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день'] - data1.loc[i, 'Остаток на конец']
 
+        data1['total_purchase'] = 'purchase - on_the_way'
+
+        features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
+                    'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
+                    'BLU','BLA','AMB']
+
+        def find_feature(text):
+            for feature in features:
+                if pd.notna(text) and feature in text:
+                    return feature
+            return "No Match"
+
+        # Apply the function to the column containing text (e.g., 'Description')
+        data1['Collection'] = data1['Номенклатура'].apply(find_feature)
+        # Creating the `purchase_df` with the necessary columns
+        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase','on_the_way','total_purchase']]
+        # Add the `on_the_way` column with a default value of 0
         
-        purchase_df = data1[['Артикул ', 'Номенклатура','purchase']]
-        if is_laminate:
-            features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
-                        'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
-                        'BLU','BLA','AMB']
-
-            def find_feature(text):
-                for feature in features:
-                    if pd.notna(text) and feature in text:
-                        return feature
-                return "No Match"
-
-            # Apply the function to the column containing text (e.g., 'Description')
-            data1['Collection'] = data1['Номенклатура'].apply(find_feature)
-            # Creating the `purchase_df` with the necessary columns
-            purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase']]d
-            # Add the `on_the_way` column with a default value of 0
-        purchase_df['on_the_way'] = 0  # Default value of 0 for all rows
         #Separate DataFrames for each sheet]
         overstock_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'overstock']]
         outofstock_df = data1[['Артикул ', 'Номенклатура', 'outofstock']]
