@@ -122,8 +122,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             # Adjust daily sales based on the percentage
             
         # Data processing logic
-        data.columns = data.iloc[12].values
-        data0 = data[15:]
+        data0 = data[2:]
         data0 = data0[:-2]
 
         cols = ['Артикул ', 'Номенклатура', 'Дней на распродажи',
