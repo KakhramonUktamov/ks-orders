@@ -195,32 +195,19 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Add USD calculation column to outofstock_df
         outofstock_df['USD of outofstock'] = ''  # Multiplied by E1 value placeholder
 
-        in_transit = pd.DataFrame(columns=['Артикул ', 'Номенклатура', 'В Пути'])
-
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             # Write each DataFrame to its respective sheet
             purchase_df.to_excel(writer, sheet_name='Рекомендательный Заказ', index=False)
             overstock_df.to_excel(writer, sheet_name='Overstock', index=False)
             outofstock_df.to_excel(writer, sheet_name='OutOfStock', index=False)
-            in_transit.to_excel(writer, sheet_name='В Пути', index=False)
 
             # Access the OutOfStock sheet to add fixed E1 value
             workbook = writer.book
             worksheet = writer.sheets['OutOfStock']
             worksheet.write('E1', 1)  # Fixed cell value for USD multiplier
             worksheet1 = writer.sheets["Рекомендательный Заказ"]
-
-            sheet = workbook['Рекомендательный Заказ']
-            in_transit_sheet_name = 'В Пути'
-
-            # Set up VLOOKUP in the 'Рекомендательный Заказ' column
-            for row in range(2, len(data1) + 2):  # Adjust for Excel indexing
-                sheet[f"G{row}"] = f"""=IFERROR(VLOOKUP(A{row},'{in_transit_sheet_name}'!A:C,3,FALSE),0)"""
-
-            # Rename the last column to 'Рекомендательный Заказ'
-            sheet.cell(1, len(data1.columns) + 1).value = 'Рекомендательный Заказ'
-
+            
             # Write the formula for each row in the 'USD of outofstock' column
             for row_num in range(1, len(outofstock_df) + 1):
                 formula = f'=C{row_num + 1}*$E$1'  # C column for outofstock, $E$1 for fixed value
