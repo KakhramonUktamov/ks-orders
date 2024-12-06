@@ -195,12 +195,15 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Add USD calculation column to outofstock_df
         outofstock_df['USD of outofstock'] = ''  # Multiplied by E1 value placeholder
 
+        on_the_way = pd.DataFrame(columns = ['Артикул ', 'Номенклатура','В Пути'])
+
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             # Write each DataFrame to its respective sheet
             purchase_df.to_excel(writer, sheet_name='Рекомендательный Заказ', index=False)
             overstock_df.to_excel(writer, sheet_name='Overstock', index=False)
             outofstock_df.to_excel(writer, sheet_name='OutOfStock', index=False)
+            on_the_way.to_excel(writer, sheet_name='В Пути', index=False)
 
             # Access the OutOfStock sheet to add fixed E1 value
             workbook = writer.book
