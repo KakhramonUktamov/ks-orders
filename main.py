@@ -168,8 +168,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         for i, value in enumerate(data1['Остаток на конец']):
             if value <= 50:
-                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * 
-                    data1.loc[i, 'Средние продажи день']*percentage - data1.loc[i, 'Остаток на конец']
+                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день']*percentage - data1.loc[i, 'Остаток на конец']
 
         data1['Рекомендательный Заказ'] = 'helper - on_the_way'
 
