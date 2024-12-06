@@ -144,10 +144,10 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         data1 = data1.reset_index(drop=True)
 
         data1['Общый продажи период'] = data1['Средние продажи день'] * days
-        data1['purchase'] = 0.0  # Set as float to allow numerical and 'overstock' entries
+        data1['helper'] = 0.0  # Set as float to allow numerical and 'overstock' entries
         data1['overstock'] = 0.0
         data1['outofstock'] = 0
-        data1['В путе'] = 0
+        data1['В пути'] = 0
         
         # Ensure numerical columns are float-compatible
         if is_laminate:
@@ -160,17 +160,18 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         for i, value in enumerate(data1['Дней на распродажи']):
             if value <= days and value >= 0:
                 # Calculate purchase as float
-                data1.loc[i, 'purchase'] = float(data1.loc[i, 'Общый продажи период'] - data1.loc[i, 'Остаток на конец'])
+                data1.loc[i, 'helper'] = float(data1.loc[i, 'Общый продажи период'] - data1.loc[i, 'Остаток на конец'])
             else:
                 # Set 'overstock' string, handled by float-compatible column
-                data1.loc[i, 'purchase'] = 0
+                data1.loc[i, 'helper'] = 0
                 data1.loc[i, 'overstock'] = float(data1.loc[i, 'Остаток на конец'] - data1.loc[i, 'Общый продажи период'])
 
         for i, value in enumerate(data1['Остаток на конец']):
             if value <= 50:
-                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * data1.loc[i, 'Средние продажи день']*percentage - data1.loc[i, 'Остаток на конец']
+                data1.loc[i, 'outofstock'] = data1.loc[i, 'Прошло дней от последней продажи'] * 
+                    data1.loc[i, 'Средние продажи день']*percentage - data1.loc[i, 'Остаток на конец']
 
-        data1['Заказ'] = 'purchase - on_the_way'
+        data1['Рекомендательный Заказ'] = 'helper - on_the_way'
 
         features = ['ЕMR','EMR','YEL','WHT','ULT','SF','RUB','RED','PG','ORN','NC',
                     'LM','LAG','IND','GRN','GREY','FP STNX','FP PLC','FP NTR','CHR',
@@ -183,13 +184,13 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return "No Match"
 
         # Apply the function to the column containing text (e.g., 'Description')
-        data1['Collection'] = data1['Номенклатура'].apply(find_feature)
+        data1['Коллекция'] = data1['Номенклатура'].apply(find_feature)
         # Creating the `purchase_df` with the necessary columns
-        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'purchase','В путе','Заказ']]
+        purchase_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'helper','В пути','Рекомендательный Заказ']]
         # Add the `on_the_way` column with a default value of 0
         
         #Separate DataFrames for each sheet]
-        overstock_df = data1[['Артикул ', 'Номенклатура', 'Collection', 'overstock']]
+        overstock_df = data1[['Артикул ', 'Номенклатура', 'Коллекция', 'overstock']]
         outofstock_df = data1[['Артикул ', 'Номенклатура', 'outofstock']]
 
         # Add USD calculation column to outofstock_df
@@ -198,7 +199,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             # Write each DataFrame to its respective sheet
-            purchase_df.to_excel(writer, sheet_name='Purchase', index=False)
+            purchase_df.to_excel(writer, sheet_name='Рекомендательный Заказ', index=False)
             overstock_df.to_excel(writer, sheet_name='Overstock', index=False)
             outofstock_df.to_excel(writer, sheet_name='OutOfStock', index=False)
 
@@ -206,7 +207,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             workbook = writer.book
             worksheet = writer.sheets['OutOfStock']
             worksheet.write('E1', 1)  # Fixed cell value for USD multiplier
-            worksheet1 = writer.sheets["Purchase"]
+            worksheet1 = writer.sheets["Рекомендательный Заказ"]
 
             # Write the formula for each row in the 'USD of outofstock' column
             for row_num in range(1, len(outofstock_df) + 1):
@@ -215,7 +216,9 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             
             # Write formulas to `total_purchase` column for dynamic calculation
             for row_num in range(1, len(purchase_df) + 1):  # Starting from row 1 to avoid headers
-                worksheet1.write_formula(row_num, 5, f'=D{row_num + 1} - E{row_num + 1}')  # C = purchase, D = on_the_way, result in E = total_purchase
+                worksheet1.write_formula(
+                    row_num, 5, f'=MAX(D{row_num + 1} - E{row_num + 1}, 0)'
+                )  # Ensure the result is not less than 0
 
         output.seek(0)
 
