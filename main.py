@@ -222,6 +222,10 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     row_num, 5, f'=MAX(D{row_num + 1} - E{row_num + 1}, 0)'
                 )  # Ensure the result is not less than 0
 
+            for row_num in range(1, len(purchase_df) + 1):
+                worksheet1.write_formula(row_num - 1, 5, f'=iferror(VLOOKUP(A{row_num}, \'В Пути\'!A:C, 3, FALSE),0)')
+
+
         output.seek(0)
 
         await message.reply_document(document=output, filename="processed_data.xlsx", caption="Вот ваш обработанный файл.")
