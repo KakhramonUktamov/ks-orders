@@ -8,7 +8,7 @@ from io import BytesIO
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-ALLOWED_NUMBERS = ["+998916919534", "+998958330373"]  # Replace with your company's authorized phone numbers
+ALLOWED_NUMBERS = ["998916919534", "998958330373"]  # Replace with your company's authorized phone numbers
 
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
@@ -304,6 +304,7 @@ def main() -> None:
 
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("restart", restart))  # Adding a standalone handler for /restart command
+    application.add_handler(CommandHandler("cancel", cancel)) # candeling the process
     application.add_handler(MessageHandler(filters.CONTACT, handle_phone))  # Handle phone numbers
     # Run the bot using long polling
     application.run_polling()
