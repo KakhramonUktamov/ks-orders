@@ -40,10 +40,6 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
     phone_number = normalize_phone_number(contact.phone_number)
 
-    # Log the received phone number for debugging
-    print(f"Received phone number: {phone_number}")  # Log to console
-    await update.message.reply_text(f"DEBUG: Received phone number: {phone_number}")
-
     # Check if the phone number is in the allowed list
     if phone_number in ALLOWED_NUMBERS:
         context.user_data['verified'] = True  # Mark the user as verified
