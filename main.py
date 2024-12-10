@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 from datetime import datetime
-import psycorp2 
+import psycopg2 
 from psycopg2.extras import execute_values
 
 # Database configuration
