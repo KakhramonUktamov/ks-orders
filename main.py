@@ -300,7 +300,6 @@ def main() -> None:
 
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("restart", restart))  # Adding a standalone handler for /restart command
-    application.add_handler(CommandHandler("cancel", cancel)) # candeling the process
     application.add_handler(MessageHandler(filters.CONTACT, handle_phone))  # Handle phone numbers
     # Run the bot using long polling
     application.run_polling()
