@@ -13,22 +13,6 @@ ALLOWED_NUMBERS = ["998916919534", "998958330373"]  # Replace with your company'
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Start the bot and request phone verification if needed."""
-    # Check if the user has already verified their phone number
-    if 'verified' in context.user_data and context.user_data['verified']:
-        await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
-        return ASK_FILE
-
-    # Prompt for phone number verification
-    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        "For security purposes, please share your phone number to verify your identity.",
-        reply_markup=reply_markup
-    )
-    return ConversationHandler.END  # Wait for phone verification before proceeding
 
 def normalize_phone_number(phone_number: str) -> str:
     """Normalize phone numbers to international format."""
@@ -45,7 +29,6 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['verified'] = True  # Mark the user as verified
         await update.message.reply_text(
             "Access Granted. Welcome to the bot! You are now verified.\n"
-            "Please send me the Excel file you'd like to process."
         )
         return ASK_FILE  # Proceed to file processing
     else:
@@ -53,6 +36,23 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Access Denied. Your phone number is not authorized to use this bot."
         )
         return ConversationHandler.END
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the bot and request phone verification if needed."""
+    # Check if the user has already verified their phone number
+    if 'verified' in context.user_data and context.user_data['verified']:
+        await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
+        return ASK_FILE
+
+    # Prompt for phone number verification
+    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "For security purposes, please share your phone number to verify your identity.",
+        reply_markup=reply_markup
+    )
+    return ConversationHandler.END  # Wait for phone verification before proceeding
 
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
