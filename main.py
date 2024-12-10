@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 
@@ -8,13 +8,47 @@ from io import BytesIO
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
+ALLOWED_NUMBERS = ["+998916919534", "+998958330373"]  # Replace with your company's authorized phone numbers
+
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
-    context.user_data.clear()  # Clear any previous user data
-    return ASK_FILE
+    """Start the bot and request phone verification if needed."""
+    # Check if the user has already verified their phone number
+    if 'verified' in context.user_data and context.user_data['verified']:
+        await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
+        return ASK_FILE
+
+    # Prompt for phone number verification
+    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "For security purposes, please share your phone number to verify your identity.",
+        reply_markup=reply_markup
+    )
+    return ConversationHandler.END  # Wait for phone verification before proceeding
+
+async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the shared phone number and verify access."""
+    contact = update.message.contact
+    phone_number = contact.phone_number
+
+    # Check if the phone number is in the allowed list
+    if phone_number in ALLOWED_NUMBERS:
+        context.user_data['verified'] = True  # Mark the user as verified
+        await update.message.reply_text(
+            "Access Granted. Welcome to the bot! You are now verified.\n"
+            "Please send me the Excel file you'd like to process."
+        )
+        return ASK_FILE  # Proceed to file processing
+    else:
+        await update.message.reply_text(
+            "Access Denied. Your phone number is not authorized to use this bot."
+        )
+        return ConversationHandler.END
+
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Перезапуск процесса. Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
@@ -25,6 +59,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Процесс отменен. Вы можете начать заново, набрав /start.")
     context.user_data.clear()  # Clear any data in case they want to start again
     return ConversationHandler.END
+
 
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -260,7 +295,7 @@ def main() -> None:
 
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("restart", restart))  # Adding a standalone handler for /restart command
-
+    application.add_handler(MessageHandler(filters.CONTACT, handle_phone))  # Handle phone numbers
     # Run the bot using long polling
     application.run_polling()
 
