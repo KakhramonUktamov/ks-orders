@@ -30,10 +30,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return ConversationHandler.END  # Wait for phone verification before proceeding
 
+def normalize_phone_number(phone_number: str) -> str:
+    """Normalize phone numbers to international format."""
+    return "".join(c for c in phone_number if c.isdigit() or c == "+")
+
+
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the shared phone number and verify access."""
     contact = update.message.contact
-    phone_number = contact.phone_number
+    phone_number = normalize_phone_number(contact.phone_number)
+
+    # Log the received phone number for debugging
+    print(f"Received phone number: {phone_number}")  # Log to console
+    await update.message.reply_text(f"DEBUG: Received phone number: {phone_number}")
 
     # Check if the phone number is in the allowed list
     if phone_number in ALLOWED_NUMBERS:
