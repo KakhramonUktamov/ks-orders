@@ -3,66 +3,6 @@ import pandas as pd
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
-from datetime import datetime
-import psycopg2 
-from psycopg2.extras import execute_values
-
-# Database configuration
-DB_CONFIG = {
-    "dbname": "ks-luxbotdb",  # Replace with your database name
-    "user": "postgres",        # Replace with your username
-    "password": "377345",    # Replace with your password
-    "host": "localhost",            # Replace with your host, e.g., localhost or IP
-    "port": 5433                    # Default PostgreSQL port
-}
-
-# Function to connect to PostgreSQL
-def get_db_connection():
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        return conn
-    except Exception as e:
-        print(f"Database connection error: {e}")
-        raise
-
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    # Create `users` table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            telegram_id BIGINT UNIQUE,
-            username TEXT,
-            phone_number TEXT,
-            last_used TIMESTAMP
-        )
-    """)
-    # Create `files` table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS files (
-            id SERIAL PRIMARY KEY,
-            user_id BIGINT REFERENCES users(telegram_id),
-            file_name TEXT,
-            file_path TEXT,
-            upload_time TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def log_file_upload(user_id, file_name, file_path):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Insert file record
-    cursor.execute("""
-        INSERT INTO files (user_id, file_name, file_path, upload_time)
-        VALUES (%s, %s, %s, %s)
-    """, (user_id, file_name, file_path, datetime.now()))
-    
-    conn.commit()
-    conn.close()
 
 
 # Retrieve the bot token from environment variables
@@ -70,24 +10,8 @@ BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
-async def log_user(update: Update):
-    user = update.message.from_user
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Insert or update user record
-    cursor.execute("""
-        INSERT INTO users (telegram_id, username, last_used)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (telegram_id) DO UPDATE SET last_used = EXCLUDED.last_used
-    """, (user.id, user.username, datetime.now()))
-    
-    conn.commit()
-    conn.close()
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await log_user(update)  # Log user interaction
     await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
     context.user_data.clear()  # Clear any previous user data
     return ASK_FILE
@@ -104,32 +28,22 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user = update.message.from_user
+    # Download file and convert it to pandas DataFrame
     file = await update.message.document.get_file()
-    file_name = update.message.document.file_name
-    file_path = os.path.join("user_files", f"{user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file_name}")
+    excel_bytes = BytesIO()
+    await file.download_to_memory(excel_bytes)
+    excel_bytes.seek(0)
     
     try:
-        # Save the file locally
-        await file.download(file_path)
-        
-        # Log file metadata in the database
-        log_file_upload(user.id, file_name, file_path)
-        
-        # Process the file (existing logic)
-        excel_bytes = BytesIO()
-        await file.download_to_memory(excel_bytes)
-        excel_bytes.seek(0)
-
-        try:
-            data = pd.read_excel(excel_bytes)
-            context.user_data['data'] = data  # Store the DataFrame for further processing
-            await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
-            return ASK_DAYS
-        except ValueError as e:
-            await update.message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
-            print("File read error:", e)
-            return ASK_FILE
+        # Load the data into a DataFrame and store it
+        data = pd.read_excel(excel_bytes)
+        context.user_data['data'] = data  # Store the DataFrame for further processing
+        await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
+        return ASK_DAYS
+    except ValueError as e:
+        await update.message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
+        print("File read error:", e)
+        return ASK_FILE  # Stay in the same state if file reading fails
 
     except Exception as e:
         await update.message.reply_text("Произошла ошибка при сохранении файла.")
@@ -330,8 +244,6 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def main() -> None:
-    init_db()  # Initialize the PostgreSQL database and tables
-    
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Set up the conversation handler
