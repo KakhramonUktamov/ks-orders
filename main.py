@@ -1,8 +1,18 @@
 import os
+import logging
 import pandas as pd
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
+
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    filename="bot_activity.log"  # Logs will be saved to this file
+)
+
+logger = logging.getLogger(__name__)
 
 
 # Retrieve the bot token from environment variables
@@ -28,6 +38,9 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.contact:  # Phone number shared via "Share Phone Number" button
         phone_number = normalize_phone_number(update.message.contact.phone_number)
 
+        # Log the received phone number
+        logger.info(f"Phone number received via button: {phone_number}")
+      
         # Check if the phone number is in the allowed list
         if phone_number in ALLOWED_NUMBERS:
             context.user_data['verified'] = True  # Mark the user as verified
@@ -37,11 +50,13 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ASK_FILE  # Proceed to file processing
         else:
+            logger.warning(f"Unauthorized access attempt with phone number: {phone_number}")
             await update.message.reply_text(
                 "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
             )
             return ConversationHandler.END
-    else:  # User typed their phone number manually
+    else:              # User typed their phone number manually
+        logger.warning(f"Manual input detected: {update.message.text.strip()}")
         await update.message.reply_text(
             "Пожалуйста, используйте кнопку 'Поделиться номером телефона', чтобы отправить свой номер для подтверждения."
         )
@@ -63,6 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Для обеспечения безопасности, пожалуйста, поделитесь своим номером телефона для подтверждения вашей личности.",
         reply_markup=reply_markup
     )
+    logger.info(f"Start command received from user: {update.message.chat.username}")
     return ASK_FILE  # Move to the file handling state once verified 
 
 
@@ -72,6 +88,7 @@ async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ASK_FILE  # Directly transition to ASK_FILE state
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info(f"Cancel command received from user: {update.message.chat.username}")
     await update.message.reply_text("Процесс отменен. Вы можете начать заново, набрав /start.")
     context.user_data.clear()  # Clear any data in case they want to start again
     return ConversationHandler.END
@@ -303,7 +320,8 @@ def main() -> None:
         states={
             ASK_FILE: [
                 MessageHandler(filters.Document.FileExtension("xlsx"), handle_file),
-                MessageHandler(filters.CONTACT, handle_phone)
+                MessageHandler(filters.CONTACT, handle_phone),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone)
             ],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
             ASK_BRAND: [CallbackQueryHandler(handle_brand)],
