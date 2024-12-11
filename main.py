@@ -1,20 +1,23 @@
 import os
 import logging
 import pandas as pd
+from collections import defaultdict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 
-# Configure logging to output to the console
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,  # Adjust the level as needed (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    handlers=[
-        logging.StreamHandler()  # Stream logs to stdout
-    ]
-)
+# Dictionary to track user activity
+user_activity = defaultdict(lambda: {"usage_count": 0, "phone_number": None})
 
-logger = logging.getLogger(__name__)
+USER_ACTIVITY_FILE = "user_activity.json"
+
+# Load previous activity from file
+if os.path.exists(USER_ACTIVITY_FILE):
+    with open(USER_ACTIVITY_FILE, "r") as file:
+        user_activity.update(json.load(file))
+
+# Admin Telegram ID (set as Heroku environment variable)
+ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
 
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -39,8 +42,12 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     if update.message.contact:  # Phone number shared via "Share Phone Number" button
         phone_number = normalize_phone_number(update.message.contact.phone_number)
-        logger.info(f"User {user.username} (ID: {user.id}) shared phone number: {phone_number}")
-      
+        user_activity[user.username]["phone_number"] = phone_number  # Store phone number
+        user_activity[user.username]["usage_count"] += 1  # Increment usage count
+        # Save updated activity to file
+        with open(USER_ACTIVITY_FILE, "w") as file:
+            json.dump(user_activity, file)
+            
         # Check if the phone number is in the allowed list
         if phone_number in ALLOWED_NUMBERS:
             context.user_data['verified'] = True  # Mark the user as verified
@@ -66,7 +73,11 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the bot and request phone verification if needed."""
     user = update.message.from_user
-    logger.info(f"User {user.username} (ID: {user.id}) started the bot.")
+    user_activity[user.username]["usage_count"] += 1
+
+    # Save updated activity to file
+    with open(USER_ACTIVITY_FILE, "w") as file:
+        json.dump(user_activity, file)
     
     # Check if the user has already verified their phone number
     if 'verified' in context.user_data and context.user_data['verified']:
@@ -186,6 +197,35 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("Пожалуйста, введите допустимое число для процента.")
         return ASK_PERCENTAGE
 
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send user activity logs as an Excel file to the admin."""
+    if str(update.message.chat.id) == ADMIN_TELEGRAM_ID:  # Restrict to admin only
+        if not user_activity:
+            await update.message.reply_text("No user activity recorded yet.")
+            return
+
+        # Convert user activity dictionary to a DataFrame
+        data = [
+            {"Username": username, "Usage Count": details["usage_count"], "Phone Number": details["phone_number"]}
+            for username, details in user_activity.items()
+        ]
+        df = pd.DataFrame(data)
+
+        # Create an Excel file in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="User Activity")
+        output.seek(0)
+
+        # Send the Excel file
+        await update.message.reply_document(
+            document=output,
+            filename="user_activity.xlsx",
+            caption="📊 Here is the user activity log in Excel format."
+        )
+    else:
+        await update.message.reply_text("You are not authorized to use this command.")
 
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -341,6 +381,8 @@ def main() -> None:
     )
 
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("stats", stats))
+
 
     # Run the bot using long polling
     application.run_polling()
