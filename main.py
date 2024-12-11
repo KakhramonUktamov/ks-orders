@@ -303,7 +303,7 @@ def main() -> None:
     )
 
     application.add_handler(conv_handler)
-    application.add_handler()  # Handle phone numbers
+
     # Run the bot using long polling
     application.run_polling()
 
