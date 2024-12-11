@@ -36,7 +36,7 @@ def normalize_phone_number(phone_number: str) -> str:
 
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone numbers sent via the 'Share Phone Number' button."""
-    user - update.message.from_user
+    user = update.message.from_user
     if update.message.contact:  # Phone number shared via "Share Phone Number" button
         phone_number = normalize_phone_number(update.message.contact.phone_number)
         logger.info(f"User {user.username} (ID: {user.id}) shared phone number: {phone_number}")
