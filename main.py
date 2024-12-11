@@ -58,7 +58,7 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:              # User typed their phone number manually
         logger.warning(f"Manual input detected: {update.message.text.strip()}")
         await update.message.reply_text(
-            "Пожалуйста, используйте кнопку 'Поделиться номером телефона', чтобы отправить свой номер для подтверждения."
+            "Пожалуйста, используйте кнопку 'Share Phone Number', чтобы отправить свой номер для подтверждения."
         )
         return ASK_FILE  # Stay in the current state, waiting for correct input
 
