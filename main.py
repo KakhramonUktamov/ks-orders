@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import logging
 import pandas as pd
 import json
@@ -17,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 # Dictionary to track user activity
-user_activity = defaultdict(lambda: {"usage_count": 0, "phone_number": None})
+user_activity = defaultdict(lambda: {
+    "usage_count": 0, 
+    "phone_number": None,
+    "last_used": None
+})
 
 USER_ACTIVITY_FILE = "user_activity.json"
 
@@ -50,10 +55,13 @@ def normalize_phone_number(phone_number: str) -> str:
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone numbers sent via the 'Share Phone Number' button."""
     user = update.message.from_user
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     if update.message.contact:  # Phone number shared via "Share Phone Number" button
         phone_number = normalize_phone_number(update.message.contact.phone_number)
         user_activity[user.username]["phone_number"] = phone_number  # Store phone number
         user_activity[user.username]["usage_count"] += 1  # Increment usage count
+        user_activity[user.username]["last_used"] = now
         # Save updated activity to file
         with open(USER_ACTIVITY_FILE, "w") as file:
             json.dump(user_activity, file)
@@ -83,7 +91,9 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the bot and request phone verification if needed."""
     user = update.message.from_user
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     user_activity[user.username]["usage_count"] += 1
+    user_activity[user.username]["last_used"] = now
 
     # Save updated activity to file
     with open(USER_ACTIVITY_FILE, "w") as file:
@@ -229,7 +239,12 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Convert user activity to a DataFrame
         data = [
-            {"Username": username, "Usage Count": details["usage_count"], "Phone Number": details["phone_number"]}
+            {
+                "Username": username, 
+                 "Usage Count": details["usage_count"], 
+                 "Phone Number": details["phone_number"],
+                 "Last Used": details["last_used"]
+            }
             for username, details in user_activity.items()
         ]
         df = pd.DataFrame(data)
