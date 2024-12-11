@@ -99,7 +99,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Download file and convert it to pandas DataFrame
-    user = upate.message.from_user
+    user = update.message.from_user
     file = await update.message.document.get_file()
     excel_bytes = BytesIO()
     await file.download_to_memory(excel_bytes)
