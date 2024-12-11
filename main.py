@@ -241,10 +241,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             start_date = datetime.strptime(args[0], "%Y-%m-%d")
             end_date = start_date  # Single date means exact match
         else:
-            await update.message.reply_text(
-                "Please provide a date range in the format `/stats YYYY-MM-DD [YYYY-MM-DD]`."
-            )
-            return
+            # No date provided; include all data
+            start_date = None
+            end_date = None
     except ValueError:
         logger.error("Invalid date format provided in /stats command.")
         await update.message.reply_text(
@@ -252,7 +251,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    logger.info(f"Filtering activity from {start_date} to {end_date}")
+    logger.info(f"Generating stats. Start Date: {start_date}, End Date: {end_date}")
 
     # Filter user activity based on date range
     filtered_data = []
@@ -262,7 +261,17 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if last_used:
             try:
                 last_used_date = datetime.strptime(last_used, "%Y-%m-%d %H:%M:%S")
-                if start_date <= last_used_date <= end_date:
+                if start_date and end_date:
+                    # Filter by date range
+                    if start_date <= last_used_date <= end_date:
+                        filtered_data.append({
+                            "Username": username,
+                            "Usage Count": details["usage_count"],
+                            "Phone Number": details["phone_number"],
+                            "Last Used": details["last_used"]
+                        })
+                else:
+                    # Include all data when no date range is specified
                     filtered_data.append({
                         "Username": username,
                         "Usage Count": details["usage_count"],
@@ -274,7 +283,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 continue
 
     if not filtered_data:
-        await update.message.reply_text("No activity found for the specified date range.")
+        await update.message.reply_text("No activity found.")
         return
 
     logger.info(f"Filtered Data: {filtered_data}")
@@ -291,8 +300,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Send the Excel file
     await update.message.reply_document(
         document=output,
-        filename="user_activity_filtered.xlsx",
-        caption=f"📊 User activity from {start_date.date()} to {end_date.date()}."
+        filename="user_activity.xlsx" if not start_date else "user_activity_filtered.xlsx",
+        caption=f"📊 User activity log{' from all time' if not start_date else f' from {start_date.date()} to {end_date.date()}'}."
     )
 
 
