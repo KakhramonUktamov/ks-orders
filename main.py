@@ -100,12 +100,16 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Download file and convert it to pandas DataFrame
     user = update.message.from_user
+    document = update.message.document
+    file_name = document.file_name
+    file_size = document.file_size
+
+    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file.file_name} (Size: {file.file_size} bytes)")
+    
     file = await update.message.document.get_file()
     excel_bytes = BytesIO()
     await file.download_to_memory(excel_bytes)
     excel_bytes.seek(0)
-    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file.file_name} (Size: {file.file_size} bytes)")
-    
     try:
         # Load the data into a DataFrame and store it
         data = pd.read_excel(excel_bytes)
