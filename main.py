@@ -28,12 +28,13 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if phone_number in ALLOWED_NUMBERS:
         context.user_data['verified'] = True  # Mark the user as verified
         await update.message.reply_text(
-            "Access Granted. Welcome to the bot! You are now verified.\n"
+            "Доступ предоставлен. Добро пожаловать в бот! Вы подтверждены.\n"
+            "Пожалуйста, отправьте Excel файл, который вы хотите обработать."
         )
         return ASK_FILE  # Proceed to file processing
     else:
         await update.message.reply_text(
-            "Access Denied. Your phone number is not authorized to use this bot."
+            "Доступ запрещен. Ваш номер телефона не авторизован для использования этого бота."
         )
         return ConversationHandler.END
 
@@ -41,7 +42,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the bot and request phone verification if needed."""
     # Check if the user has already verified their phone number
     if 'verified' in context.user_data and context.user_data['verified']:
-        await update.message.reply_text("Ассалому Алайкум! Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
+        await update.message.reply_text("Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
         return ASK_FILE
 
     # Prompt for phone number verification
@@ -49,10 +50,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
     await update.message.reply_text(
-        "For security purposes, please share your phone number to verify your identity.",
+        "Для обеспечения безопасности, пожалуйста, поделитесь своим номером телефона для подтверждения вашей личности.",
         reply_markup=reply_markup
     )
-    return ConversationHandler.END  # Wait for phone verification before proceeding
+    return ASK_FILE  # Move to the file handling state once verified 
 
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -288,19 +289,21 @@ def main() -> None:
 
     # Set up the conversation handler
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("restart", restart)],
+        entry_points=[CommandHandler("start", start)],
         states={
-            ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
+            ASK_FILE: [
+                MessageHandler(filters.Document.FileExtension("xlsx"), handle_file),
+                MessageHandler(filters.CONTACT, handle_phone)
+            ],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
             ASK_BRAND: [CallbackQueryHandler(handle_brand)],
             ASK_PERCENTAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_percentage)], 
         },
-        fallbacks=[CommandHandler("cancel", cancel), CommandHandler("restart", restart)],  # Adding fallbacks for /cancel and /restart
+        fallbacks=[CommandHandler("cancel", cancel)],  # Adding fallbacks for /cancel and /restart
     )
 
     application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("restart", restart))  # Adding a standalone handler for /restart command
-    application.add_handler(MessageHandler(filters.CONTACT, handle_phone))  # Handle phone numbers
+    application.add_handler()  # Handle phone numbers
     # Run the bot using long polling
     application.run_polling()
 
