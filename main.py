@@ -104,8 +104,8 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     file_name = document.file_name
     file_size = document.file_size
 
-    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file.file_name} (Size: {file.file_size} bytes)")
-    
+    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file_name} (Size: {file_size} bytes)")
+
     file = await update.message.document.get_file()
     excel_bytes = BytesIO()
     await file.download_to_memory(excel_bytes)
