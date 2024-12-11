@@ -1,6 +1,7 @@
 import os
 import logging
 import pandas as pd
+import json
 from collections import defaultdict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
@@ -200,7 +201,7 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send user activity logs as an Excel file to the admin."""
-    if str(update.message.chat.id) == ADMIN_TELEGRAM_ID:  # Restrict to admin only
+    if str(update.message.chat.id) != str(ADMIN_TELEGRAM_ID):  # Restrict to admin only
         if not user_activity:
             await update.message.reply_text("No user activity recorded yet.")
             return
