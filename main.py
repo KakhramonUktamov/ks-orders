@@ -36,11 +36,10 @@ def normalize_phone_number(phone_number: str) -> str:
 
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone numbers sent via the 'Share Phone Number' button."""
+    user - update.message.from_user
     if update.message.contact:  # Phone number shared via "Share Phone Number" button
         phone_number = normalize_phone_number(update.message.contact.phone_number)
-
-        # Log the received phone number
-        logger.info(f"Phone number received via button: {phone_number}")
+        logger.info(f"User {user.username} (ID: {user.id}) shared phone number: {phone_number}")
       
         # Check if the phone number is in the allowed list
         if phone_number in ALLOWED_NUMBERS:
@@ -51,13 +50,13 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ASK_FILE  # Proceed to file processing
         else:
-            logger.warning(f"Unauthorized access attempt with phone number: {phone_number}")
+            logger.warning(f"Unauthorized access attempt by {user.username} (ID: {user.id}) with phone: {phone_number}")
             await update.message.reply_text(
                 "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
             )
             return ConversationHandler.END
     else:              # User typed their phone number manually
-        logger.warning(f"Manual input detected: {update.message.text.strip()}")
+        logger.warning(f"User {user.username} (ID: {user.id}) manually typed a number, not shared via button.")
         await update.message.reply_text(
             "Пожалуйста, используйте кнопку 'Share Phone Number', чтобы отправить свой номер для подтверждения."
         )
@@ -66,6 +65,9 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the bot and request phone verification if needed."""
+    user = update.message.from_user
+    logger.info(f"User {user.username} (ID: {user.id}) started the bot.")
+    
     # Check if the user has already verified their phone number
     if 'verified' in context.user_data and context.user_data['verified']:
         await update.message.reply_text("Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
@@ -79,7 +81,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Для обеспечения безопасности, пожалуйста, поделитесь своим номером телефона для подтверждения вашей личности.",
         reply_markup=reply_markup
     )
-    logger.info(f"Start command received from user: {update.message.chat.username}")
     return ASK_FILE  # Move to the file handling state once verified 
 
 
@@ -98,18 +99,22 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Download file and convert it to pandas DataFrame
+    user = upate.message.from_user
     file = await update.message.document.get_file()
     excel_bytes = BytesIO()
     await file.download_to_memory(excel_bytes)
     excel_bytes.seek(0)
+    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file.file_name} (Size: {file.file_size} bytes)")
     
     try:
         # Load the data into a DataFrame and store it
         data = pd.read_excel(excel_bytes)
         context.user_data['data'] = data  # Store the DataFrame for further processing
+        logger.info(f"File from {user.username} (ID: {user.id}) is being processed.")
         await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
         return ASK_DAYS
     except ValueError as e:
+        logger.error(f"Error processing file from {user.username} (ID: {user.id}): {e}")
         await update.message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
         print("File read error:", e)
         return ASK_FILE  # Stay in the same state if file reading fails
