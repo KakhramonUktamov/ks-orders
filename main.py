@@ -5,15 +5,16 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 
-# Configure logging
+# Configure logging to output to the console
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    filename="bot_activity.log"  # Logs will be saved to this file
+    level=logging.INFO,  # Adjust the level as needed (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    handlers=[
+        logging.StreamHandler()  # Stream logs to stdout
+    ]
 )
 
 logger = logging.getLogger(__name__)
-
 
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
