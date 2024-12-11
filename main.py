@@ -211,21 +211,30 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send user activity logs as an Excel file to the admin."""
     user_id = str(update.message.chat.id)
-    logger.info(f"User ID: {user_id}, Admin ID: {ADMIN_TELEGRAM_ID}")
-    
-    if user_id != str(ADMIN_TELEGRAM_ID):  # Restrict to admin only
-        if not user_activity:
-            await update.message.reply_text("No user activity recorded yet.")
-            return
+    admin_id = str(ADMIN_TELEGRAM_ID)
 
-        # Convert user activity dictionary to a DataFrame
+    # Debugging log for ID comparison
+    logger.info(f"User ID: {user_id}, Admin ID: {admin_id}")
+
+    # Check if the user is authorized
+    if user_id != admin_id:
+        await update.message.reply_text("You are not authorized to use this command.")
+        return
+
+    # Proceed to generate the activity log if the user is authorized
+    if not user_activity:
+        await update.message.reply_text("No user activity recorded yet.")
+        return
+
+    try:
+        # Convert user activity to a DataFrame
         data = [
             {"Username": username, "Usage Count": details["usage_count"], "Phone Number": details["phone_number"]}
             for username, details in user_activity.items()
         ]
         df = pd.DataFrame(data)
 
-        # Create an Excel file in memory
+        # Generate an Excel file
         output = BytesIO()
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             df.to_excel(writer, index=False, sheet_name="User Activity")
@@ -237,9 +246,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             filename="user_activity.xlsx",
             caption="📊 Here is the user activity log in Excel format."
         )
-    else:
-        await update.message.reply_text("You are not authorized to use this command.")
-
+    except Exception as e:
+        logger.error(f"Error generating stats file: {e}")
+        await update.message.reply_text("An error occurred while generating the activity report.")
+        
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Identify if we have an update from a callback query or a regular message
