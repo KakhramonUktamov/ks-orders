@@ -23,7 +23,6 @@ def normalize_phone_number(phone_number: str) -> str:
         phone_number = "+" + phone_number
     return phone_number
 
-
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle phone numbers sent via the 'Share Phone Number' button."""
     if update.message.contact:  # Phone number shared via "Share Phone Number" button
@@ -42,11 +41,11 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
             )
             return ConversationHandler.END
-      else:  # User typed their phone number manually
-          await update.message.reply_text(
-              "Пожалуйста, используйте кнопку 'Поделиться номером телефона', чтобы отправить свой номер для подтверждения."
-          )
-          return ASK_FILE  # Stay in the current state, waiting for correct input
+    else:  # User typed their phone number manually
+        await update.message.reply_text(
+            "Пожалуйста, используйте кнопку 'Поделиться номером телефона', чтобы отправить свой номер для подтверждения."
+        )
+        return ASK_FILE  # Stay in the current state, waiting for correct input
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
