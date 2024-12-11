@@ -218,7 +218,6 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return ASK_PERCENTAGE
 
 
-
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send user activity logs as an Excel file to the admin, optionally filtered by date range."""
     user_id = str(update.message.chat.id)
@@ -241,19 +240,28 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif len(args) == 1:
             start_date = datetime.strptime(args[0], "%Y-%m-%d")
             end_date = start_date  # Single date means exact match
+        else:
+            await update.message.reply_text(
+                "Please provide a date range in the format `/stats YYYY-MM-DD [YYYY-MM-DD]`."
+            )
+            return
     except ValueError:
+        logger.error("Invalid date format provided in /stats command.")
         await update.message.reply_text(
             "Invalid date format. Please use `/stats YYYY-MM-DD [YYYY-MM-DD]`."
         )
         return
 
+    logger.info(f"Filtering activity from {start_date} to {end_date}")
+
     # Filter user activity based on date range
     filtered_data = []
     for username, details in user_activity.items():
         last_used = details.get("last_used")
+        logger.debug(f"Checking user: {username}, Last Used: {last_used}")
         if last_used:
-            last_used_date = datetime.strptime(last_used, "%Y-%m-%d %H:%M:%S")
-            if start_date and end_date:
+            try:
+                last_used_date = datetime.strptime(last_used, "%Y-%m-%d %H:%M:%S")
                 if start_date <= last_used_date <= end_date:
                     filtered_data.append({
                         "Username": username,
@@ -261,10 +269,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "Phone Number": details["phone_number"],
                         "Last Used": details["last_used"]
                     })
+            except ValueError:
+                logger.error(f"Invalid date format in last_used for user {username}: {last_used}")
+                continue
 
     if not filtered_data:
         await update.message.reply_text("No activity found for the specified date range.")
         return
+
+    logger.info(f"Filtered Data: {filtered_data}")
 
     # Convert filtered data to a DataFrame
     df = pd.DataFrame(filtered_data)
@@ -281,6 +294,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         filename="user_activity_filtered.xlsx",
         caption=f"📊 User activity from {start_date.date()} to {end_date.date()}."
     )
+
+
 
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
