@@ -8,7 +8,7 @@ from io import BytesIO
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-ALLOWED_NUMBERS = ["+998916919534", "998958330373",
+ALLOWED_NUMBERS = ["+998916919534", "+998958330373",
                    "+998884758000","+998900212141","+998998449669"]  # Replace with your company's authorized phone numbers
 
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
@@ -17,27 +17,37 @@ ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
 def normalize_phone_number(phone_number: str) -> str:
     """Normalize phone numbers to international format."""
-    return "".join(c for c in phone_number if c.isdigit() or c == "+")
+    phone_number = "".join(c for c in phone_number if c.isdigit() or c == "+")
+    # Ensure all numbers start with '+'
+    if not phone_number.startswith("+"):
+        phone_number = "+" + phone_number
+    return phone_number
 
 
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the shared phone number and verify access."""
-    contact = update.message.contact
-    phone_number = normalize_phone_number(contact.phone_number)
+    """Handle phone numbers sent via the 'Share Phone Number' button."""
+    if update.message.contact:  # Phone number shared via "Share Phone Number" button
+        phone_number = normalize_phone_number(update.message.contact.phone_number)
 
-    # Check if the phone number is in the allowed list
-    if phone_number in ALLOWED_NUMBERS:
-        context.user_data['verified'] = True  # Mark the user as verified
+        # Check if the phone number is in the allowed list
+        if phone_number in ALLOWED_NUMBERS:
+            context.user_data['verified'] = True  # Mark the user as verified
+            await update.message.reply_text(
+                "Доступ предоставлен! ✅. Добро пожаловать в бот от KS Group! Вы подтверждены.\n"
+                "Пожалуйста, отправьте Excel файл, который вы хотите обработать."
+            )
+            return ASK_FILE  # Proceed to file processing
+        else:
+            await update.message.reply_text(
+                "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
+            )
+            return ConversationHandler.END
+     else:  # User typed their phone number manually
         await update.message.reply_text(
-            "Доступ предоставлен! ✅. Добро пожаловать в бот от KS Group! Вы подтверждены.\n"
-            "Пожалуйста, отправьте Excel файл, который вы хотите обработать."
+            "Пожалуйста, используйте кнопку 'Поделиться номером телефона', чтобы отправить свой номер для подтверждения."
         )
-        return ASK_FILE  # Proceed to file processing
-    else:
-        await update.message.reply_text(
-            "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
-        )
-        return ConversationHandler.END
+        return ASK_FILE  # Stay in the current state, waiting for correct input
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the bot and request phone verification if needed."""
