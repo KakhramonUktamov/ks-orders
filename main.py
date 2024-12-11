@@ -210,7 +210,10 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send user activity logs as an Excel file to the admin."""
-    if str(update.message.chat.id) != str(ADMIN_TELEGRAM_ID):  # Restrict to admin only
+    user_id = str(update.message.chat.id)
+    logger.info(f"User ID: {user_id}, Admin ID: {ADMIN_TELEGRAM_ID}")
+    
+    if user_id != str(ADMIN_TELEGRAM_ID):  # Restrict to admin only
         if not user_activity:
             await update.message.reply_text("No user activity recorded yet.")
             return
