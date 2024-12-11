@@ -218,53 +218,70 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return ASK_PERCENTAGE
 
 
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send user activity logs as an Excel file to the admin."""
+    """Send user activity logs as an Excel file to the admin, optionally filtered by date range."""
     user_id = str(update.message.chat.id)
     admin_id = str(ADMIN_TELEGRAM_ID)
-
-    # Debugging log for ID comparison
-    logger.info(f"User ID: {user_id}, Admin ID: {admin_id}")
 
     # Check if the user is authorized
     if user_id != admin_id:
         await update.message.reply_text("You are not authorized to use this command.")
         return
 
-    # Proceed to generate the activity log if the user is authorized
-    if not user_activity:
-        await update.message.reply_text("No user activity recorded yet.")
-        return
+    # Parse optional date arguments
+    args = context.args
+    start_date = None
+    end_date = None
 
     try:
-        # Convert user activity to a DataFrame
-        data = [
-            {
-                "Username": username, 
-                 "Usage Count": details["usage_count"], 
-                 "Phone Number": details["phone_number"],
-                 "Last Used": details["last_used"]
-            }
-            for username, details in user_activity.items()
-        ]
-        df = pd.DataFrame(data)
-
-        # Generate an Excel file
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            df.to_excel(writer, index=False, sheet_name="User Activity")
-        output.seek(0)
-
-        # Send the Excel file
-        await update.message.reply_document(
-            document=output,
-            filename="user_activity.xlsx",
-            caption="📊 Here is the user activity log in Excel format."
+        if len(args) >= 2:
+            start_date = datetime.strptime(args[0], "%Y-%m-%d")
+            end_date = datetime.strptime(args[1], "%Y-%m-%d")
+        elif len(args) == 1:
+            start_date = datetime.strptime(args[0], "%Y-%m-%d")
+            end_date = start_date  # Single date means exact match
+    except ValueError:
+        await update.message.reply_text(
+            "Invalid date format. Please use `/stats YYYY-MM-DD [YYYY-MM-DD]`."
         )
-    except Exception as e:
-        logger.error(f"Error generating stats file: {e}")
-        await update.message.reply_text("An error occurred while generating the activity report.")
-        
+        return
+
+    # Filter user activity based on date range
+    filtered_data = []
+    for username, details in user_activity.items():
+        last_used = details.get("last_used")
+        if last_used:
+            last_used_date = datetime.strptime(last_used, "%Y-%m-%d %H:%M:%S")
+            if start_date and end_date:
+                if start_date <= last_used_date <= end_date:
+                    filtered_data.append({
+                        "Username": username,
+                        "Usage Count": details["usage_count"],
+                        "Phone Number": details["phone_number"],
+                        "Last Used": details["last_used"]
+                    })
+
+    if not filtered_data:
+        await update.message.reply_text("No activity found for the specified date range.")
+        return
+
+    # Convert filtered data to a DataFrame
+    df = pd.DataFrame(filtered_data)
+
+    # Generate an Excel file
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="User Activity")
+    output.seek(0)
+
+    # Send the Excel file
+    await update.message.reply_document(
+        document=output,
+        filename="user_activity_filtered.xlsx",
+        caption=f"📊 User activity from {start_date.date()} to {end_date.date()}."
+    )
+
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Identify if we have an update from a callback query or a regular message
