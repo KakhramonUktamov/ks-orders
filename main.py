@@ -28,13 +28,13 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if phone_number in ALLOWED_NUMBERS:
         context.user_data['verified'] = True  # Mark the user as verified
         await update.message.reply_text(
-            "Доступ предоставлен. Добро пожаловать в бот! Вы подтверждены.\n"
+            "Доступ предоставлен! ✅. Добро пожаловать в бот от KS Group! Вы подтверждены.\n"
             "Пожалуйста, отправьте Excel файл, который вы хотите обработать."
         )
         return ASK_FILE  # Proceed to file processing
     else:
         await update.message.reply_text(
-            "Доступ запрещен. Ваш номер телефона не авторизован для использования этого бота."
+            "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
         )
         return ConversationHandler.END
 
@@ -277,7 +277,7 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         output.seek(0)
 
-        await message.reply_document(document=output, filename="processed_data.xlsx", caption="Вот ваш обработанный файл.")
+        await message.reply_document(document=output, filename="processed_data.xlsx", caption="📎Вот ваш обработанный файл.")
 
     except Exception as e:
         await message.reply_text("Произошла непредвиденная ошибка при обработке файла.")
