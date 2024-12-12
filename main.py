@@ -16,7 +16,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE, ASK_PHONE, MAIN_MENU, PRODUCT_ORDER, ADMIN_PANEL, HELP_MENU = range(9)  # Define the states
 
 # Dictionary to track user activity
 user_activity = defaultdict(lambda: {
@@ -24,18 +23,24 @@ user_activity = defaultdict(lambda: {
     "phone_number": None,
     "last_used": None
 })
-# Admin and allowed phone numbers
-ADMIN_PHONE = "+998916919534"
-ALLOWED_NUMBERS = ["+998916919534"]
 
 USER_ACTIVITY_FILE = "user_activity.json"
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
 
 # Load previous activity from file
 if os.path.exists(USER_ACTIVITY_FILE):
     with open(USER_ACTIVITY_FILE, "r") as file:
         user_activity.update(json.load(file))
+
+# Admin Telegram ID (set as Heroku environment variable)
+ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
+
+# Retrieve the bot token from environment variables
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+
+ALLOWED_NUMBERS = ["+998916919534", "+998958330373",
+                   "+998884758000","+998900212141","+998998449669"]  # Replace with your company's authorized phone numbers
+
+ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
 
 
@@ -47,42 +52,68 @@ def normalize_phone_number(phone_number: str) -> str:
         phone_number = "+" + phone_number
     return phone_number
 
+async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle phone numbers sent via the 'Share Phone Number' button."""
+    user = update.message.from_user
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    if update.message.contact:  # Phone number shared via "Share Phone Number" button
+        phone_number = normalize_phone_number(update.message.contact.phone_number)
+        user_activity[user.username]["phone_number"] = phone_number  # Store phone number
+        user_activity[user.username]["usage_count"] += 1  # Increment usage count
+        user_activity[user.username]["last_used"] = now
+        # Save updated activity to file
+        with open(USER_ACTIVITY_FILE, "w") as file:
+            json.dump(user_activity, file)
+            
+        # Check if the phone number is in the allowed list
+        if phone_number in ALLOWED_NUMBERS:
+            context.user_data['verified'] = True  # Mark the user as verified
+            await update.message.reply_text(
+                "Доступ предоставлен! ✅. Добро пожаловать в бот от KS Group! Вы подтверждены.\n"
+                "Пожалуйста, отправьте Excel файл, который вы хотите обработать."
+            )
+            return ASK_FILE  # Proceed to file processing
+        else:
+            logger.warning(f"Unauthorized access attempt by {user.username} (ID: {user.id}) with phone: {phone_number}")
+            await update.message.reply_text(
+                "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
+            )
+            return ConversationHandler.END
+    else:              # User typed their phone number manually
+        logger.warning(f"User {user.username} (ID: {user.id}) manually typed a number, not shared via button.")
+        await update.message.reply_text(
+            "Пожалуйста, используйте кнопку 'Share Phone Number', чтобы отправить свой номер для подтверждения."
+        )
+        return ASK_FILE  # Stay in the current state, waiting for correct input
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the bot and request phone verification if needed."""
     user = update.message.from_user
-    context.user_data.clear()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     user_activity[user.username]["usage_count"] += 1
     user_activity[user.username]["last_used"] = now
-    user_activity[user.username]["phone_number"] = None
+
+    # Save updated activity to file
     with open(USER_ACTIVITY_FILE, "w") as file:
         json.dump(user_activity, file)
+    
+    # Check if the user has already verified their phone number
+    if 'verified' in context.user_data and context.user_data['verified']:
+        await update.message.reply_text("Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
+        return ASK_FILE
 
+    # Prompt for phone number verification
     keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("Please share your phone number for verification.", reply_markup=reply_markup)
-    return ASK_PHONE
+    
+    await update.message.reply_text(
+        "Для обеспечения безопасности, пожалуйста, поделитесь своим номером телефона для подтверждения вашей личности.",
+        reply_markup=reply_markup
+    )
+    return ASK_FILE  # Move to the file handling state once verified 
 
-
-async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user = update.message.from_user
-    if update.message.contact:
-        phone_number = normalize_phone_number(update.message.contact.phone_number)
-        user_activity[user.username]["phone_number"] = phone_number
-        with open(USER_ACTIVITY_FILE, "w") as file:
-            json.dump(user_activity, file)
-
-        if phone_number in ALLOWED_NUMBERS:
-            context.user_data['verified'] = True
-            return await show_main_menu(update, context)
-        else:
-            await update.message.reply_text("Access denied. Your phone number is not authorized.")
-            return ConversationHandler.END
-    else:
-        keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text("Please share your phone number using the button below.", reply_markup=reply_markup)
-        return ASK_PHONE
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Перезапуск процесса. Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
@@ -95,84 +126,39 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()  # Clear any data in case they want to start again
     return ConversationHandler.END
 
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [["Product-Order", "Admin Panel"], ["Help"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Choose a service:", reply_markup=reply_markup)
-    return MAIN_MENU
-
-async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text
-
-    if text == "Product-Order":
-        await update.message.reply_text("Please upload your Excel file.")
-        return PRODUCT_ORDER
-    elif text == "Admin Panel":
-        if context.user_data.get('verified') and ADMIN_PHONE in ALLOWED_NUMBERS:
-            return await admin_panel(update, context)
-        else:
-            await update.message.reply_text("Access denied. Admin only.")
-            return MAIN_MENU
-    elif text == "Help":
-        await update.message.reply_text("Usage instructions:\n1. Share phone number.\n2. Choose service.\n3. Follow prompts.")
-        return HELP_MENU
-    
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [["View Allowed List", "Add Phone"], ["Remove Phone", "User Activity"], ["Back"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Admin Panel:", reply_markup=reply_markup)
-    return ADMIN_PANEL
-
-
-async def handle_admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text
-
-    if text == "View Allowed List":
-        allowed_list = "\n".join(ALLOWED_NUMBERS)
-        await update.message.reply_text(f"Allowed Numbers:\n{allowed_list}")
-    elif text == "Add Phone":
-        await update.message.reply_text("Send the phone number to add:")
-        context.user_data['admin_action'] = "add_phone"
-        return ADMIN_PANEL
-    elif text == "Remove Phone":
-        await update.message.reply_text("Send the phone number to remove:")
-        context.user_data['admin_action'] = "remove_phone"
-        return ADMIN_PANEL
-    elif text == "User Activity":
-        output = BytesIO()
-        df = pd.DataFrame.from_dict(user_activity, orient="index")
-        df.to_excel(output, index=True)
-        output.seek(0)
-        await update.message.reply_document(document=output, filename="user_activity.xlsx")
-    elif text == "Back":
-        return await show_main_menu(update, context)
-    return ADMIN_PANEL
 
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Download file and convert it to pandas DataFrame
+    user = update.message.from_user
+    document = update.message.document
+    file_name = document.file_name
+    file_size = document.file_size
+
+    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file_name} (Size: {file_size} bytes)")
+
+    file = await update.message.document.get_file()
+    excel_bytes = BytesIO()
+    await file.download_to_memory(excel_bytes)
+    excel_bytes.seek(0)
     try:
-        user = update.message.from_user
-        document = update.message.document
-        file = await document.get_file()
-        file_data = BytesIO()
-        await file.download_to_memory(file_data)
-        file_data.seek(0)
+        # Load the data into a DataFrame and store it
+        data = pd.read_excel(excel_bytes)
+        context.user_data['data'] = data  # Store the DataFrame for further processing
+        logger.info(f"File from {user.username} (ID: {user.id}) is being processed.")
+        await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
+        return ASK_DAYS
+    except ValueError as e:
+        logger.error(f"Error processing file from {user.username} (ID: {user.id}): {e}")
+        await update.message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
+        print("File read error:", e)
+        return ASK_FILE  # Stay in the same state if file reading fails
 
-        # Process the Excel file (dummy implementation for now)
-        df = pd.read_excel(file_data)
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            df.to_excel(writer, index=False)
-        output.seek(0)
-
-        await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
-        return await show_main_menu(update, context)
     except Exception as e:
-        await update.message.reply_text("An error occurred while processing the file.")
-        return PRODUCT_ORDER
+        await update.message.reply_text("Произошла ошибка при сохранении файла.")
+        print("File save error:", e)
+        return ASK_FILE
 
-async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    return await show_main_menu(update, context)
 
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
@@ -230,6 +216,94 @@ async def handle_percentage(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except ValueError:
         await update.message.reply_text("Пожалуйста, введите допустимое число для процента.")
         return ASK_PERCENTAGE
+
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send user activity logs as an Excel file to the admin, optionally filtered by date range."""
+    user_id = str(update.message.chat.id)
+    admin_id = str(ADMIN_TELEGRAM_ID)
+
+    # Check if the user is authorized
+    if user_id != admin_id:
+        await update.message.reply_text("You are not authorized to use this command.")
+        return
+
+    # Parse optional date arguments
+    args = context.args
+    start_date = None
+    end_date = None
+
+    try:
+        if len(args) >= 2:
+            start_date = datetime.strptime(args[0], "%Y-%m-%d")
+            end_date = datetime.strptime(args[1], "%Y-%m-%d")
+        elif len(args) == 1:
+            start_date = datetime.strptime(args[0], "%Y-%m-%d")
+            end_date = start_date  # Single date means exact match
+        else:
+            # No date provided; include all data
+            start_date = None
+            end_date = None
+    except ValueError:
+        logger.error("Invalid date format provided in /stats command.")
+        await update.message.reply_text(
+            "Invalid date format. Please use `/stats YYYY-MM-DD [YYYY-MM-DD]`."
+        )
+        return
+
+    logger.info(f"Generating stats. Start Date: {start_date}, End Date: {end_date}")
+
+    # Filter user activity based on date range
+    filtered_data = []
+    for username, details in user_activity.items():
+        last_used = details.get("last_used")
+        logger.debug(f"Checking user: {username}, Last Used: {last_used}")
+        if last_used:
+            try:
+                last_used_date = datetime.strptime(last_used, "%Y-%m-%d %H:%M:%S")
+                if start_date and end_date:
+                    # Filter by date range
+                    if start_date <= last_used_date <= end_date:
+                        filtered_data.append({
+                            "Username": username,
+                            "Usage Count": details["usage_count"],
+                            "Phone Number": details["phone_number"],
+                            "Last Used": details["last_used"]
+                        })
+                else:
+                    # Include all data when no date range is specified
+                    filtered_data.append({
+                        "Username": username,
+                        "Usage Count": details["usage_count"],
+                        "Phone Number": details["phone_number"],
+                        "Last Used": details["last_used"]
+                    })
+            except ValueError:
+                logger.error(f"Invalid date format in last_used for user {username}: {last_used}")
+                continue
+
+    if not filtered_data:
+        await update.message.reply_text("No activity found.")
+        return
+
+    logger.info(f"Filtered Data: {filtered_data}")
+
+    # Convert filtered data to a DataFrame
+    df = pd.DataFrame(filtered_data)
+
+    # Generate an Excel file
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="User Activity")
+    output.seek(0)
+
+    # Send the Excel file
+    await update.message.reply_document(
+        document=output,
+        filename="user_activity.xlsx" if not start_date else "user_activity_filtered.xlsx",
+        caption=f"📊 User activity log{' from all time' if not start_date else f' from {start_date.date()} to {end_date.date()}'}."
+    )
+
 
 
 
@@ -380,16 +454,14 @@ def main() -> None:
             ],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
             ASK_BRAND: [CallbackQueryHandler(handle_brand)],
-            ASK_PERCENTAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_percentage)],
-            ASK_PHONE: [MessageHandler(filters.CONTACT, handle_phone)],
-            MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
-            PRODUCT_ORDER: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
-            ADMIN_PANEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_action)],
+            ASK_PERCENTAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_percentage)], 
         },
-        fallbacks=[CommandHandler("cancel", cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, back_to_main)]  # Adding fallbacks for /cancel and /restart
+        fallbacks=[CommandHandler("cancel", cancel)],  # Adding fallbacks for /cancel and /restart
     )
 
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("stats", stats))
+
 
     # Run the bot using long polling
     application.run_polling()
