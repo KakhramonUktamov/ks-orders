@@ -93,10 +93,12 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if update.message.contact:
         phone_number = normalize_phone_number(update.message.contact.phone_number)
-        user_activity[user.username].update({"phone_number": phone_number, "usage_count": 1, "last_used": now})
-        save_user_activity()
 
         if phone_number in ALLOWED_NUMBERS:
+            # Update user activity only for verified users
+            user_activity[user.username].update({"phone_number": phone_number, "usage_count": user_activity[user.username]["usage_count"] + 1, "last_used": now})
+            save_user_activity()
+
             context.user_data['verified'] = True
             await show_main_menu(update, context)
             return MAIN_MENU
@@ -106,6 +108,7 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Please share your phone number using the button.")
         return ASK_FILE
+
 
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -234,6 +237,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Download file and convert it to pandas DataFrame
+    context.user_data.clear()
     user = update.message.from_user
     document = update.message.document
     file_name = document.file_name
