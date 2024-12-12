@@ -8,6 +8,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 
+# Admin Telegram ID (set as Heroku environment variable)
+ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -24,22 +27,29 @@ user_activity = defaultdict(lambda: {
 })
 ALLOWED_NUMBERS_FILE = "allowed_numbers.json"
 USER_ACTIVITY_FILE = "user_activity.json"
+DEFAULT_ADMIN_PHONE = "+998916919534"
+
+if DEFAULT_ADMIN_PHONE not in ALLOWED_NUMBERS:
+    ALLOWED_NUMBERS.append(DEFAULT_ADMIN_PHONE)
+    with open(ALLOWED_NUMBERS_FILE, "w") as file:
+        json.dump(ALLOWED_NUMBERS, file)
 
 # Load allowed numbers
-if os.path.exists(ALLOWED_NUMBERS_FILE):
-    with open(ALLOWED_NUMBERS_FILE, "r") as file:
-        ALLOWED_NUMBERS = json.load(file)
-else:
+try:
+    if os.path.exists(ALLOWED_NUMBERS_FILE):
+        with open(ALLOWED_NUMBERS_FILE, "r") as file:
+            ALLOWED_NUMBERS = json.load(file)
+            if not isinstance(ALLOWED_NUMBERS, list):
+                raise ValueError("Invalid data format in allowed_numbers.json")
+    else:
+        ALLOWED_NUMBERS = []
+except (ValueError, FileNotFoundError):
     ALLOWED_NUMBERS = []
 
 # Load previous activity from file
 if os.path.exists(USER_ACTIVITY_FILE):
     with open(USER_ACTIVITY_FILE, "r") as file:
         user_activity.update(json.load(file))
-
-# Admin Telegram ID (set as Heroku environment variable)
-ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE, MAIN_MENU, ADMIN_PANEL = range(6)  # Define the states
