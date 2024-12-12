@@ -8,43 +8,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 from io import BytesIO
 
+import logging
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-
-# Admin Telegram ID (set as Heroku environment variable)
-ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ALLOWED_NUMBERS_FILE = "allowed_numbers.json"
-USER_ACTIVITY_FILE = "user_activity.json"
-
-
-ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE, MAIN_MENU, ADMIN_PANEL, ADD_PHONE, REMOVE_PHONE = range(8)  # Define the states
-
-
-
-DEFAULT_ADMIN_PHONE = "+998916919534"
-
-
-# Load allowed numbers
-try:
-    if os.path.exists(ALLOWED_NUMBERS_FILE):
-        with open(ALLOWED_NUMBERS_FILE, "r") as file:
-            ALLOWED_NUMBERS = json.load(file)
-            if not isinstance(ALLOWED_NUMBERS, list):
-                raise ValueError("Invalid data format in allowed_numbers.json")
-    else:
-        ALLOWED_NUMBERS = []
-except (ValueError, FileNotFoundError):
-    ALLOWED_NUMBERS = []
-
-if DEFAULT_ADMIN_PHONE not in ALLOWED_NUMBERS:
-    ALLOWED_NUMBERS.append(DEFAULT_ADMIN_PHONE)
-    with open(ALLOWED_NUMBERS_FILE, "w") as file:
-        json.dump(ALLOWED_NUMBERS, file)
 
 
 # Dictionary to track user activity
@@ -54,195 +24,95 @@ user_activity = defaultdict(lambda: {
     "last_used": None
 })
 
+USER_ACTIVITY_FILE = "user_activity.json"
+
 # Load previous activity from file
 if os.path.exists(USER_ACTIVITY_FILE):
     with open(USER_ACTIVITY_FILE, "r") as file:
         user_activity.update(json.load(file))
 
-def save_user_activity():
-    with open(USER_ACTIVITY_FILE, "w") as file:
-        json.dump(user_activity, file)
+# Admin Telegram ID (set as Heroku environment variable)
+ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
 
-def save_allowed_numbers():
-    """Save allowed numbers to a JSON file"""
-    with open(ALLOWED_NUMBERS_FILE, "w") as file:
-        json.dump(ALLOWED_NUMBERS, file)
+# Retrieve the bot token from environment variables
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+
+ALLOWED_NUMBERS = ["+998916919534", "+998958330373",
+                   "+998884758000","+998900212141","+998998449669"]  # Replace with your company's authorized phone numbers
+
+ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
+
 
 
 def normalize_phone_number(phone_number: str) -> str:
     """Normalize phone numbers to international format."""
     phone_number = "".join(c for c in phone_number if c.isdigit() or c == "+")
-    return "+" + phone_number if not phone_number.startswith("+") else phone_number
-
-# Handlers
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start the bot and verify phone number."""
-    if 'verified' in context.user_data:
-        await show_main_menu(update, context)
-        return MAIN_MENU
-
-    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Please share your phone number for verification.", reply_markup=reply_markup)
-    return ASK_FILE
-
+    # Ensure all numbers start with '+'
+    if not phone_number.startswith("+"):
+        phone_number = "+" + phone_number
+    return phone_number
 
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Verify phone number."""
-    logger.info("Entering handle_phone function.")
-    try:
-        user = update.message.from_user
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Check if the user shared their contact or typed the number manually
-        if update.message.contact:
-            phone_number = normalize_phone_number(update.message.contact.phone_number)
-            logger.info(f"Received phone number via contact: {phone_number}")
-        elif update.message.text:
-            phone_number = normalize_phone_number(update.message.text.strip())
-            logger.info(f"Received phone number manually: {phone_number}")
-        else:
-            await update.message.reply_text("Please share your phone number using the button.")
-            return ASK_FILE
-
-        # Check if the phone number is authorized
-        if phone_number in ALLOWED_NUMBERS:
-            logger.info(f"Phone number {phone_number} is authorized.")
+    """Handle phone numbers sent via the 'Share Phone Number' button."""
+    user = update.message.from_user
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    if update.message.contact:  # Phone number shared via "Share Phone Number" button
+        phone_number = normalize_phone_number(update.message.contact.phone_number)
+        user_activity[user.username]["phone_number"] = phone_number  # Store phone number
+        user_activity[user.username]["usage_count"] += 1  # Increment usage count
+        user_activity[user.username]["last_used"] = now
+        # Save updated activity to file
+        with open(USER_ACTIVITY_FILE, "w") as file:
+            json.dump(user_activity, file)
             
-            # Update user activity
-            user_activity[user.username].update({
-                "phone_number": phone_number,
-                "usage_count": user_activity[user.username]["usage_count"] + 1,
-                "last_used": now
-            })
-            save_user_activity()
-
-            context.user_data['verified'] = True
-            await update.message.reply_text("✅ Your phone number has been verified.")
-            await show_main_menu(update, context)
-            return MAIN_MENU
+        # Check if the phone number is in the allowed list
+        if phone_number in ALLOWED_NUMBERS:
+            context.user_data['verified'] = True  # Mark the user as verified
+            await update.message.reply_text(
+                "Доступ предоставлен! ✅. Добро пожаловать в бот от KS Group! Вы подтверждены.\n"
+                "Пожалуйста, отправьте Excel файл, который вы хотите обработать."
+            )
+            return ASK_FILE  # Proceed to file processing
         else:
-            logger.warning(f"Unauthorized phone number: {phone_number}")
-            await update.message.reply_text("❌ Access Denied. Your phone number is not authorized.")
+            logger.warning(f"Unauthorized access attempt by {user.username} (ID: {user.id}) with phone: {phone_number}")
+            await update.message.reply_text(
+                "Доступ запрещен! ❌. Ваш номер телефона не авторизован для использования этого бота."
+            )
             return ConversationHandler.END
-    except Exception as e:
-        logger.error(f"Error in handle_phone: {e}")
-        await update.message.reply_text("An unexpected error occurred while verifying your phone number.")
+    else:              # User typed their phone number manually
+        logger.warning(f"User {user.username} (ID: {user.id}) manually typed a number, not shared via button.")
+        await update.message.reply_text(
+            "Пожалуйста, используйте кнопку 'Share Phone Number', чтобы отправить свой номер для подтверждения."
+        )
+        return ASK_FILE  # Stay in the current state, waiting for correct input
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the bot and request phone verification if needed."""
+    user = update.message.from_user
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    user_activity[user.username]["usage_count"] += 1
+    user_activity[user.username]["last_used"] = now
+
+    # Save updated activity to file
+    with open(USER_ACTIVITY_FILE, "w") as file:
+        json.dump(user_activity, file)
+    
+    # Check if the user has already verified their phone number
+    if 'verified' in context.user_data and context.user_data['verified']:
+        await update.message.reply_text("Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
         return ASK_FILE
 
-
-
-
-
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display the main menu."""
-    keyboard = [
-        [KeyboardButton("📊 Product-Order"), KeyboardButton("🛠️ Admin Panel")],
-        [KeyboardButton("ℹ️ Help")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Choose an option:", reply_markup=reply_markup)
-    return MAIN_MENU
-
-
-async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle main menu actions."""
-    text = update.message.text
-    if text == "📊 Product-Order":
-        await update.message.reply_text("Please send the Excel file to process.")
-        return ASK_FILE
-    elif text == "🛠️ Admin Panel":
-        if str(update.message.chat.id) == ADMIN_TELEGRAM_ID:
-            await show_admin_panel(update, context)
-            return ADMIN_PANEL
-        else:
-            await update.message.reply_text("You are not authorized to access the Admin Panel.")
-            return MAIN_MENU
-    elif text == "ℹ️ Help":
-        await update.message.reply_text("ℹ️ How to use this bot:\n1. Verify your phone.\n2. Use Product-Order for file processing.")
-        return MAIN_MENU
-
-
-async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display admin panel options."""
-    keyboard = [
-        [KeyboardButton("📜 Access List"), KeyboardButton("➕ Add Phone"), KeyboardButton("➖ Remove Phone")],
-        [KeyboardButton("📊 Activity List"), KeyboardButton("⬅️ Back")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-    await update.message.reply_text("Admin Panel Options:", reply_markup=reply_markup)
-    return ADMIN_PANEL
-
-
-async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle admin panel actions."""
-    text = update.message.text
-    if text == "📜 Access List":
-        access_list = "\n".join(ALLOWED_NUMBERS) or "No numbers authorized."
-        await update.message.reply_text(f"📜 Access List:\n{access_list}")
-    elif text == "➕ Add Phone":
-        await update.message.reply_text("Send the phone number to add:")
-        return ADD_PHONE
-    elif text == "➖ Remove Phone":
-        await update.message.reply_text("Send the phone number to remove:")
-        return REMOVE_PHONE
-    elif text == "📊 Activity List":
-        await download_activity_list(update, context)
-    elif text == "⬅️ Back":
-        await show_main_menu(update, context)
-        return MAIN_MENU
-    return ADMIN_PANEL
-
-
-async def add_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Add a phone number to the allowed list."""
-    phone_number = normalize_phone_number(update.message.text)
-    if phone_number not in ALLOWED_NUMBERS:
-        ALLOWED_NUMBERS.append(phone_number)
-        save_allowed_numbers()
-        await update.message.reply_text(f"✅ {phone_number} added to the access list.")
-    else:
-        await update.message.reply_text(f"ℹ️ {phone_number} is already in the access list.")
-    return ADMIN_PANEL
-
-
-async def remove_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Remove a phone number from the allowed list."""
-    phone_number = normalize_phone_number(update.message.text)
-    if phone_number in ALLOWED_NUMBERS:
-        ALLOWED_NUMBERS.remove(phone_number)
-        save_allowed_numbers()
-        await update.message.reply_text(f"✅ {phone_number} removed from the access list.")
-    else:
-        await update.message.reply_text(f"ℹ️ {phone_number} is not in the access list.")
-    return ADMIN_PANEL
-
-async def download_activity_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Generate and send the user activity list as an Excel file."""
-    if str(update.message.chat.id) != ADMIN_TELEGRAM_ID:
-        await update.message.reply_text("❌ You are not authorized to access this feature.")
-        return ADMIN_PANEL
-
-    data = [
-        {"Username": username, "Usage Count": details["usage_count"], "Phone Number": details["phone_number"], "Last Used": details["last_used"]}
-        for username, details in user_activity.items()
-    ]
-    if not data:
-        await update.message.reply_text("No user activity data found.")
-        return ADMIN_PANEL
-
-    df = pd.DataFrame(data)
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="User Activity")
-    output.seek(0)
-
-    await update.message.reply_document(
-        document=output,
-        filename="user_activity.xlsx",
-        caption="📊 Here is the user activity list."
+    # Prompt for phone number verification
+    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "Для обеспечения безопасности, пожалуйста, поделитесь своим номером телефона для подтверждения вашей личности.",
+        reply_markup=reply_markup
     )
-    return ADMIN_PANEL
+    return ASK_FILE  # Move to the file handling state once verified 
 
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -260,7 +130,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Download file and convert it to pandas DataFrame
-    context.user_data.clear()
     user = update.message.from_user
     document = update.message.document
     file_name = document.file_name
@@ -578,19 +447,22 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            ASK_FILE: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
+            ASK_FILE: [
+                MessageHandler(filters.Document.FileExtension("xlsx"), handle_file),
+                MessageHandler(filters.CONTACT, handle_phone),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_phone)
+            ],
             ASK_DAYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_days)],
             ASK_BRAND: [CallbackQueryHandler(handle_brand)],
             ASK_PERCENTAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_percentage)], 
-            MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
-            ADMIN_PANEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_panel_handler)],
-            ADD_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_phone)],
-            REMOVE_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, remove_phone)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],  # Adding fallbacks for /cancel and /restart
     )
 
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("stats", stats))
+
+
     # Run the bot using long polling
     application.run_polling()
 
