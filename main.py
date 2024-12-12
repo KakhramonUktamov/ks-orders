@@ -404,8 +404,6 @@ def main() -> None:
     )
 
     application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("stats", stats))
-
 
     # Run the bot using long polling
     application.run_polling()
