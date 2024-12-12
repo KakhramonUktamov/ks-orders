@@ -91,23 +91,31 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Verify phone number."""
     user = update.message.from_user
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     if update.message.contact:
+        # Handle phone number shared via contact button
         phone_number = normalize_phone_number(update.message.contact.phone_number)
-
-        if phone_number in ALLOWED_NUMBERS:
-            # Update user activity only for verified users
-            user_activity[user.username].update({"phone_number": phone_number, "usage_count": user_activity[user.username]["usage_count"] + 1, "last_used": now})
-            save_user_activity()
-
-            context.user_data['verified'] = True
-            await show_main_menu(update, context)
-            return MAIN_MENU
-        else:
-            await update.message.reply_text("❌ Access Denied. Your phone number is not authorized.")
-            return ConversationHandler.END
     else:
-        await update.message.reply_text("Please share your phone number using the button.")
-        return ASK_FILE
+        # Handle manually entered phone numbers
+        phone_number = normalize_phone_number(update.message.text.strip())
+
+    if phone_number in ALLOWED_NUMBERS:
+        # Update user activity only for verified users
+        user_activity[user.username].update({
+            "phone_number": phone_number,
+            "usage_count": user_activity[user.username]["usage_count"] + 1,
+            "last_used": now
+        })
+        save_user_activity()
+
+        context.user_data['verified'] = True
+        await update.message.reply_text("✅ Your phone number has been verified.")
+        await show_main_menu(update, context)
+        return MAIN_MENU
+    else:
+        await update.message.reply_text("❌ Access Denied. Your phone number is not authorized.")
+        return ConversationHandler.END
+
 
 
 
