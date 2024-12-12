@@ -29,10 +29,6 @@ ALLOWED_NUMBERS_FILE = "allowed_numbers.json"
 USER_ACTIVITY_FILE = "user_activity.json"
 DEFAULT_ADMIN_PHONE = "+998916919534"
 
-if DEFAULT_ADMIN_PHONE not in ALLOWED_NUMBERS:
-    ALLOWED_NUMBERS.append(DEFAULT_ADMIN_PHONE)
-    with open(ALLOWED_NUMBERS_FILE, "w") as file:
-        json.dump(ALLOWED_NUMBERS, file)
 
 # Load allowed numbers
 try:
@@ -45,6 +41,12 @@ try:
         ALLOWED_NUMBERS = []
 except (ValueError, FileNotFoundError):
     ALLOWED_NUMBERS = []
+
+if DEFAULT_ADMIN_PHONE not in ALLOWED_NUMBERS:
+    ALLOWED_NUMBERS.append(DEFAULT_ADMIN_PHONE)
+    with open(ALLOWED_NUMBERS_FILE, "w") as file:
+        json.dump(ALLOWED_NUMBERS, file)
+
 
 # Load previous activity from file
 if os.path.exists(USER_ACTIVITY_FILE):
