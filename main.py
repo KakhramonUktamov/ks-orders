@@ -39,11 +39,6 @@ if os.path.exists(USER_ACTIVITY_FILE):
 
 
 
-
-
-
-
-
 def normalize_phone_number(phone_number: str) -> str:
     """Normalize phone numbers to international format."""
     phone_number = "".join(c for c in phone_number if c.isdigit() or c == "+")
@@ -52,9 +47,31 @@ def normalize_phone_number(phone_number: str) -> str:
         phone_number = "+" + phone_number
     return phone_number
 
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.message.from_user
+    context.user_data.clear()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    user_activity[user.username]["usage_count"] += 1
+    user_activity[user.username]["last_used"] = now
+    user_activity[user.username]["phone_number"] = None
+    with open(USER_ACTIVITY_FILE, "w") as file:
+        json.dump(user_activity, file)
+
+    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    await update.message.reply_text("Please share your phone number for verification.", reply_markup=reply_markup)
+    return ASK_PHONE
+
+
 async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.message.from_user
     if update.message.contact:
         phone_number = normalize_phone_number(update.message.contact.phone_number)
+        user_activity[user.username]["phone_number"] = phone_number
+        with open(USER_ACTIVITY_FILE, "w") as file:
+            json.dump(user_activity, file)
+
         if phone_number in ALLOWED_NUMBERS:
             context.user_data['verified'] = True
             return await show_main_menu(update, context)
@@ -62,21 +79,10 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             await update.message.reply_text("Access denied. Your phone number is not authorized.")
             return ConversationHandler.END
     else:
-        await update.message.reply_text("Please share your phone number using the button.")
+        keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text("Please share your phone number using the button below.", reply_markup=reply_markup)
         return ASK_PHONE
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user = update.message.from_user
-    context.user_data.clear()
-    if 'verified' in context.user_data and context.user_data['verified']:
-        return await show_main_menu(update, context)
-
-    keyboard = [[KeyboardButton("Share Phone Number", request_contact=True)]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    await update.message.reply_text("Please share your phone number for verification.", reply_markup=reply_markup)
-    return ASK_PHONE
-
 
 async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Перезапуск процесса. Пожалуйста, отправьте мне Excel файл, который вы хотите обработать.")
@@ -90,104 +96,83 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [
-        [InlineKeyboardButton("Product-Order", callback_data="product_order")],
-        [InlineKeyboardButton("Admin Panel", callback_data="admin_panel")],
-        [InlineKeyboardButton("Help", callback_data="help")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = [["Product-Order", "Admin Panel"], ["Help"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     await update.message.reply_text("Choose a service:", reply_markup=reply_markup)
     return MAIN_MENU
 
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
+    text = update.message.text
 
-    if query.data == "product_order":
-        await query.edit_message_text("Please upload your Excel file.")
+    if text == "Product-Order":
+        await update.message.reply_text("Please upload your Excel file.")
         return PRODUCT_ORDER
-    elif query.data == "admin_panel":
+    elif text == "Admin Panel":
         if context.user_data.get('verified') and ADMIN_PHONE in ALLOWED_NUMBERS:
             return await admin_panel(update, context)
         else:
-            await query.edit_message_text("Access denied. Admin only.")
+            await update.message.reply_text("Access denied. Admin only.")
             return MAIN_MENU
-    elif query.data == "help":
-        await query.edit_message_text("Usage instructions:\n1. Share phone number.\n2. Choose service.\n3. Follow prompts.")
+    elif text == "Help":
+        await update.message.reply_text("Usage instructions:\n1. Share phone number.\n2. Choose service.\n3. Follow prompts.")
         return HELP_MENU
     
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [
-        [InlineKeyboardButton("View Allowed List", callback_data="view_allowed")],
-        [InlineKeyboardButton("Add Phone", callback_data="add_phone")],
-        [InlineKeyboardButton("Remove Phone", callback_data="remove_phone")],
-        [InlineKeyboardButton("User Activity", callback_data="user_activity")],
-        [InlineKeyboardButton("Back", callback_data="back")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.edit_message_text("Admin Panel:", reply_markup=reply_markup)
+    keyboard = [["View Allowed List", "Add Phone"], ["Remove Phone", "User Activity"], ["Back"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    await update.message.reply_text("Admin Panel:", reply_markup=reply_markup)
     return ADMIN_PANEL
 
 
 async def handle_admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
+    text = update.message.text
 
-    if query.data == "view_allowed":
+    if text == "View Allowed List":
         allowed_list = "\n".join(ALLOWED_NUMBERS)
-        await query.edit_message_text(f"Allowed Numbers:\n{allowed_list}")
-    elif query.data == "add_phone":
-        await query.edit_message_text("Send the phone number to add:")
+        await update.message.reply_text(f"Allowed Numbers:\n{allowed_list}")
+    elif text == "Add Phone":
+        await update.message.reply_text("Send the phone number to add:")
         context.user_data['admin_action'] = "add_phone"
         return ADMIN_PANEL
-    elif query.data == "remove_phone":
-        await query.edit_message_text("Send the phone number to remove:")
+    elif text == "Remove Phone":
+        await update.message.reply_text("Send the phone number to remove:")
         context.user_data['admin_action'] = "remove_phone"
         return ADMIN_PANEL
-    elif query.data == "user_activity":
+    elif text == "User Activity":
         output = BytesIO()
         df = pd.DataFrame.from_dict(user_activity, orient="index")
         df.to_excel(output, index=True)
         output.seek(0)
-        await query.edit_message_text("Sending user activity file.")
-        await query.message.reply_document(document=output, filename="user_activity.xlsx")
-    elif query.data == "back":
+        await update.message.reply_document(document=output, filename="user_activity.xlsx")
+    elif text == "Back":
         return await show_main_menu(update, context)
     return ADMIN_PANEL
 
 
-
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # Download file and convert it to pandas DataFrame
-    user = update.message.from_user
-    document = update.message.document
-    file_name = document.file_name
-    file_size = document.file_size
-
-    logger.info(f"User {user.username} (ID: {user.id}) uploaded file: {file_name} (Size: {file_size} bytes)")
-
-    file = await update.message.document.get_file()
-    excel_bytes = BytesIO()
-    await file.download_to_memory(excel_bytes)
-    excel_bytes.seek(0)
     try:
-        # Load the data into a DataFrame and store it
-        data = pd.read_excel(excel_bytes)
-        context.user_data['data'] = data  # Store the DataFrame for further processing
-        logger.info(f"File from {user.username} (ID: {user.id}) is being processed.")
-        await update.message.reply_text("Теперь, пожалуйста, введите количество дней для overstock:")
-        return ASK_DAYS
-    except ValueError as e:
-        logger.error(f"Error processing file from {user.username} (ID: {user.id}): {e}")
-        await update.message.reply_text("Ошибка: Не удалось прочитать файл как допустимый файл Excel. Пожалуйста, загрузите допустимый файл .xlsx.")
-        print("File read error:", e)
-        return ASK_FILE  # Stay in the same state if file reading fails
+        user = update.message.from_user
+        document = update.message.document
+        file = await document.get_file()
+        file_data = BytesIO()
+        await file.download_to_memory(file_data)
+        file_data.seek(0)
 
+        # Process the Excel file (dummy implementation for now)
+        df = pd.read_excel(file_data)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False)
+        output.seek(0)
+
+        await update.message.reply_document(document=output, filename="processed_data.xlsx", caption="Here is your processed file.")
+        return await show_main_menu(update, context)
     except Exception as e:
-        await update.message.reply_text("Произошла ошибка при сохранении файла.")
-        print("File save error:", e)
-        return ASK_FILE
+        await update.message.reply_text("An error occurred while processing the file.")
+        return PRODUCT_ORDER
 
+async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    return await show_main_menu(update, context)
 
 async def handle_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
@@ -397,10 +382,11 @@ def main() -> None:
             ASK_BRAND: [CallbackQueryHandler(handle_brand)],
             ASK_PERCENTAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_percentage)],
             ASK_PHONE: [MessageHandler(filters.CONTACT, handle_phone)],
-            MAIN_MENU: [CallbackQueryHandler(main_menu_handler)],
-            ADMIN_PANEL: [CallbackQueryHandler(handle_admin_action)], 
+            MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
+            PRODUCT_ORDER: [MessageHandler(filters.Document.FileExtension("xlsx"), handle_file)],
+            ADMIN_PANEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_action)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],  # Adding fallbacks for /cancel and /restart
+        fallbacks=[CommandHandler("cancel", cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, back_to_main)]  # Adding fallbacks for /cancel and /restart
     )
 
     application.add_handler(conv_handler)
