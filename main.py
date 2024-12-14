@@ -37,8 +37,7 @@ ADMIN_TELEGRAM_ID = os.environ.get("ADMIN_TELEGRAM_ID")
 # Retrieve the bot token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-ALLOWED_NUMBERS = ["+998916919534", "+998958330373",
-                   "+998884758000","+998900212141","+998998449669"]  # Replace with your company's authorized phone numbers
+ALLOWED_NUMBERS = ["+998916919534", "+998958330373", "+998933881404"]  # Replace with your company's authorized phone numbers
 
 ASK_FILE, ASK_DAYS, ASK_BRAND, ASK_PERCENTAGE = range(4)  # Define the states
 
